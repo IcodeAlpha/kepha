@@ -34,6 +34,8 @@ const myClubs: (Club & { id: string })[] = [
     }
 ];
 
+const readBooks = books.slice(0, 3);
+
 
 function MyClubCard({ club }: { club: Club & { id: string } }) {
   const book = books.find(b => b.id === club.bookId);
@@ -82,6 +84,30 @@ function MyClubCard({ club }: { club: Club & { id: string } }) {
   )
 }
 
+function ClubListItem({ club }: { club: Club }) {
+    const book = books.find(b => b.id === club.bookId);
+
+    return (
+        <div className="flex items-center gap-4">
+        <Image
+            src={book?.coverUrl || ""}
+            alt={book?.title || ""}
+            width={40}
+            height={60}
+            className="rounded-sm"
+            data-ai-hint={book?.coverHint}
+        />
+        <div>
+            <p className="font-semibold">{club.name}</p>
+            <p className="text-sm text-muted-foreground">
+            Reading: {book?.title}
+            </p>
+        </div>
+        </div>
+    )
+}
+
+
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
 
@@ -91,12 +117,16 @@ export default function DashboardPage() {
 
   return (
     <div className="grid gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Welcome back, {user?.displayName || 'Reader'}!</CardTitle>
-          <CardDescription>
-            Here's what's happening in your book clubs.
-          </CardDescription>
+       <Card>
+        <CardHeader className="items-center text-center">
+          <Avatar className="h-24 w-24 mb-4">
+            <AvatarImage src={user?.photoURL || 'https://picsum.photos/seed/user-1/100/100'} alt={user?.displayName || 'Alex'} />
+            <AvatarFallback className="text-3xl">
+              {user?.displayName?.charAt(0) || 'A'}
+            </AvatarFallback>
+          </Avatar>
+          <CardTitle className="text-3xl">Welcome, {user?.displayName || 'Reader'}!</CardTitle>
+          <CardDescription>Member since 2024. Here's what's happening in your book clubs.</CardDescription>
         </CardHeader>
       </Card>
       
@@ -116,6 +146,36 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         )}
+      </div>
+
+       <div className="grid md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>My Other Clubs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {myClubs?.map((club) => (
+                  <ClubListItem key={club.id} club={club} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Reading History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {readBooks.map((book) => (
+                <div key={book.id}>
+                  <p className="font-semibold">{book.title}</p>
+                  <p className="text-sm text-muted-foreground">{book.author}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
