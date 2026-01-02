@@ -2,16 +2,16 @@
 "use client";
 
 import type { Book, Chapter, DiscussionPost, User, UserNote } from "@/lib/types";
-import { getAIDiscussionPrompts, getAIDiscussionSummary } from "@/app/actions";
+import { getAIDiscussionPrompts, getAIDiscussionSummary, getAIAudio } from "@/app/actions";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Separator } from "./ui/separator";
 import React, { useMemo, useState } from "react";
-import { Loader2, Sparkles, Trash2 } from "lucide-react";
+import { Loader2, Sparkles, Trash2, Volume2, Play, Pause } from "lucide-react";
 import { collection, doc, query, where } from "firebase/firestore";
-import { addDocumentNonBlocking, deleteDocumentNonBlocking, useCollection, useFirebase, useUser } from "@/firebase";
+import { addDocumentNonBlocking, deleteDocumentNonBlocking, useCollection, useDoc, useFirebase, useUser } from "@/firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useForm, SubmitHandler } from "react-hook-form";
 
@@ -21,7 +21,7 @@ interface DiscussionSectionProps {
 }
 
 function Comment({ post }: { post: DiscussionPost }) {
-    const { firestore } = useFirebase();
+    const { firestore, useMemoFirebase } = useFirebase();
     const userRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', post.userId) : null, [firestore, post.userId]);
     const { data: user } = useDoc<User>(userRef);
 
@@ -46,7 +46,7 @@ function Comment({ post }: { post: DiscussionPost }) {
 }
 
 function MyNotesSection({ bookId, chapterId }: { bookId: string; chapterId: string; }) {
-    const { firestore } = useFirebase();
+    const { firestore, useMemoFirebase } = useFirebase();
     const { user } = useUser();
     const { register, handleSubmit, reset } = useForm<{ content: string }>();
 
@@ -121,6 +121,12 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
   const [summary, setSummary] = useState<string | null>(null);
   const [isPromptsLoading, setPromptsLoading] = useState(false);
   const [isSummaryLoading, setSummaryLoading] = useState(false);
+  
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isAudioLoading, setAudioLoading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = React.useRef<HTMLAudioElement>(null);
+
 
   const discussionCollectionRef = useMemoFirebase(
     () => (firestore ? collection(firestore, "books", book.id, "chapters", chapter.id, "discussion") : null),
@@ -162,11 +168,56 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
       setSummaryLoading(false);
     }
   };
+  
+  const handleReadAloud = async () => {
+    if (audioUrl) {
+        // If audio is already loaded, just play/pause
+        if (audioRef.current) {
+            if (isPlaying) {
+                audioRef.current.pause();
+            } else {
+                audioRef.current.play();
+            }
+            setIsPlaying(!isPlaying);
+        }
+        return;
+    }
+
+    setAudioLoading(true);
+    try {
+        const result = await getAIAudio({ text: chapter.content });
+        setAudioUrl(result.audio);
+    } catch (error) {
+        console.error("Failed to generate audio:", error);
+    } finally {
+        setAudioLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (audioUrl && audioRef.current) {
+        audioRef.current.play();
+        setIsPlaying(true);
+    }
+  }, [audioUrl]);
+
+  React.useEffect(() => {
+    const audioElement = audioRef.current;
+    const onEnded = () => setIsPlaying(false);
+    if (audioElement) {
+        audioElement.addEventListener('ended', onEnded);
+    }
+    return () => {
+        if (audioElement) {
+            audioElement.removeEventListener('ended', onEnded);
+        }
+    }
+  }, [audioRef]);
 
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button onClick={handleGeneratePrompts} disabled={isPromptsLoading}>
           {isPromptsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
           Spark Conversation
@@ -175,7 +226,20 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
            {isSummaryLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Summarize Discussion
         </Button>
+        <Button variant="secondary" onClick={handleReadAloud} disabled={isAudioLoading}>
+            {isAudioLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : audioUrl ? (
+                isPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />
+            ) : (
+                <Volume2 className="mr-2 h-4 w-4" />
+            )}
+            {audioUrl ? (isPlaying ? 'Pause' : 'Play') : 'Read Aloud'}
+        </Button>
       </div>
+
+       {audioUrl && <audio ref={audioRef} src={audioUrl} className="w-full" controls />}
+
 
       {isPromptsLoading && <p className="text-sm text-muted-foreground">Generating discussion prompts...</p>}
       {prompts && (
@@ -210,7 +274,7 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
         <Tabs defaultValue="comments" className="w-full">
             <TabsList>
                 <TabsTrigger value="comments">Comments ({discussion?.length || 0})</TabsTrigger>
-                <TabsTrigger value="notes">My Notes</TabsTrigger>
+                <TabsTrigger value="notes">My Notes</TapsTrigger>
             </TabsList>
             <TabsContent value="comments" className="pt-4">
                 <div className="space-y-4">

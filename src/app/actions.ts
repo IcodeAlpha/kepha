@@ -10,6 +10,11 @@ import {
   SummarizeChapterDiscussionsInput,
   SummarizeChapterDiscussionsOutput,
 } from "@/ai/flows/summarize-chapter-discussions";
+import {
+  textToSpeech,
+  TextToSpeechInput,
+  TextToSpeechOutput,
+} from "@/ai/flows/text-to-speech";
 
 export async function getAIDiscussionPrompts(
   input: GenerateDiscussionPromptsInput
@@ -36,5 +41,19 @@ export async function getAIDiscussionSummary(
   } catch (error) {
     console.error("Error generating AI discussion summary:", error);
     throw new Error("Failed to generate discussion summary.");
+  }
+}
+
+export async function getAIAudio(
+  input: TextToSpeechInput
+): Promise<TextToSpeechOutput> {
+  console.log("Generating AI audio with input:", input.text.substring(0, 20));
+  try {
+    const output = await textToSpeech(input);
+    console.log("AI audio generated");
+    return output;
+  } catch (error) {
+    console.error("Error generating AI audio:", error);
+    throw new Error("Failed to generate audio.");
   }
 }
