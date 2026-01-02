@@ -1,3 +1,52 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "dune",
+      "description": "Book cover for Dune",
+      "imageUrl": "https://images.unsplash.com/photo-1689235540051-5c0e07074345?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxkZXNlcnQlMjBwbGFuZXR8ZW58MHx8fHwxNzY3MjYzMDk1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "desert planet"
+    },
+    {
+      "id": "pride-and-prejudice",
+      "description": "Book cover for Pride and Prejudice",
+      "imageUrl": "https://images.unsplash.com/photo-1742591775376-ad206b1302b8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8cmVnZW5jeSUyMGVyYXxlbnwwfHx8fDE3NjczMzU1MDZ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "regency era"
+    },
+    {
+      "id": "the-hobbit",
+      "description": "Book cover for The Hobbit",
+      "imageUrl": "https://images.unsplash.com/photo-1432958576632-8a39f6b97dc7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxmYW50YXN5JTIwbGFuZHNjYXBlfGVufDB8fHx8MTc2NzI3NjgxM3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "fantasy landscape"
+    },
+    {
+      "id": "moby-dick",
+      "description": "Book cover for Moby Dick",
+      "imageUrl": "https://images.unsplash.com/photo-1494791368093-85217fbbf8de?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxvY2VhbiUyMHN0b3JtfGVufDB8fHx8MTc2NzMzNTUwNnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "ocean storm"
+    },
+    {
+      "id": "sapiens",
+      "description": "Book cover for Sapiens: A Brief History of Humankind",
+      "imageUrl": "https://images.unsplash.com/photo-1594003972548-febf04e74f3a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxhbmNpZW50JTIwaHVtYW58ZW58MHx8fHwxNzY3MzM1NTA2fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "ancient human"
+    },
+    {
+      "id": "atomic-habits",
+      "description": "Book cover for Atomic Habits",
+      "imageUrl": "https://images.unsplash.com/photo-1748365335180-ef33ee0c8d48?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8Z2VhcnMlMjBhYnN0cmFjdHxlbnwwfHx8fDE3NjczMzU1MDd8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "gears abstract"
+    },
+    {
+      "id": "the-martian",
+      "description": "Book cover for The Martian",
+      "imageUrl": "https://images.unsplash.com/photo-1671804470422-ffe593a65ede?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxtYXJzJTIwbGFuZHNjYXBlfGVufDB8fHx8MTc2NzMzNTUwNnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "mars landscape"
+    },
+    {
+      "id": "circe",
+      "description": "Book cover for Circe",
+      "imageUrl": "https://images.unsplash.com/photo-1571277165587-440821e848d6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxncmVlayUyMG15dGhvbG9neXxlbnwwfHx8fDE3NjcyOTYyMzd8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "greek mythology"
+    }
+  ]
 }
