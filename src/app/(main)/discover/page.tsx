@@ -145,10 +145,6 @@ function CommunityBookCard({ book }: { book: CommunityBook }) {
             <div className="p-4">
                 <h3 className="font-bold text-lg truncate">{book.title}</h3>
                 <p className="text-sm text-muted-foreground">{book.author}</p>
-                 <Button variant="outline" className="w-full mt-4">
-                    <Plus className="mr-2"/>
-                    Start a Club
-                </Button>
             </div>
         </Card>
     )

@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { books, users as mockUsers } from "@/lib/data";
 import type { Book, Club, User } from "@/lib/types";
+import { Separator } from "@/components/ui/separator";
 
 const allClubs: (Club & { id: string })[] = [
     {
@@ -29,15 +30,18 @@ const allClubs: (Club & { id: string })[] = [
         description: 'Discussing the works of Jane Austen.',
         isPublic: true,
         bookId: 'pride-and-prejudice',
-        memberIds: ['user-1', 'user-3'],
+        memberIds: ['user-3'],
     }
 ];
 
-function ClubCard({ club }: { club: Club & { id: string } }) {
+// Assuming the current user is 'user-1'
+const currentUserId = 'user-1';
+
+function ClubCard({ club, isMember }: { club: Club & { id: string }, isMember: boolean }) {
   const book = books.find(b => b.id === club.bookId);
   const members = mockUsers.filter(u => club.memberIds.includes(u.id));
 
-  if (!book) return null; // Or a loading skeleton
+  if (!book) return null;
 
   return (
     <Card className="flex flex-col">
@@ -76,9 +80,13 @@ function ClubCard({ club }: { club: Club & { id: string } }) {
             </div>
           )}
         </div>
-        <Button asChild>
-          <Link href={`/clubs/${club.id}`}>View Club</Link>
-        </Button>
+        {isMember ? (
+            <Button asChild>
+                <Link href={`/clubs/${club.id}`}>View Club</Link>
+            </Button>
+        ) : (
+            <Button variant="secondary">Join Club</Button>
+        )}
       </CardFooter>
     </Card>
   );
@@ -86,19 +94,43 @@ function ClubCard({ club }: { club: Club & { id: string } }) {
 
 
 export default function ClubsPage() {
-  const clubs = allClubs;
+  const myClubs = allClubs.filter(club => club.memberIds.includes(currentUserId));
+  const publicClubs = allClubs.filter(club => !club.memberIds.includes(currentUserId) && club.isPublic);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Explore Clubs</h1>
+        <h1 className="text-3xl font-bold">Clubs</h1>
         <Button>Create a Club</Button>
       </div>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {clubs?.map((club) => (
-           <ClubCard key={club.id} club={club} />
-        ))}
-      </div>
+      
+      <section className="space-y-4">
+        <h2 className="text-2xl font-bold">My Clubs</h2>
+        {myClubs.length > 0 ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {myClubs.map((club) => (
+               <ClubCard key={club.id} club={club} isMember={true} />
+            ))}
+          </div>
+        ) : (
+            <p className="text-muted-foreground">You haven't joined any clubs yet.</p>
+        )}
+      </section>
+
+      <Separator />
+
+      <section className="space-y-4">
+        <h2 className="text-2xl font-bold">Explore Public Clubs</h2>
+         {publicClubs.length > 0 ? (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {publicClubs.map((club) => (
+                <ClubCard key={club.id} club={club} isMember={false} />
+                ))}
+            </div>
+         ) : (
+              <p className="text-muted-foreground">There are no public clubs to join right now.</p>
+         )}
+      </section>
     </div>
   );
 }
