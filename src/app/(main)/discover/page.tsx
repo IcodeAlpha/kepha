@@ -1,10 +1,24 @@
+
+'use client';
 import Image from "next/image";
-import { books } from "@/lib/data";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
+import { useCollection, useFirebase } from "@/firebase";
+import { collection } from "firebase/firestore";
+import type { Book } from "@/lib/types";
+import { useMemo } from "react";
 
 export default function DiscoverPage() {
+  const { firestore } = useFirebase();
+  const booksCollectionRef = useMemoFirebase(
+    () => (firestore ? collection(firestore, "books") : null),
+    [firestore]
+  );
+  const { data: books, isLoading } = useCollection<Book>(booksCollectionRef);
+
+  // TODO: Implement client-side search on the 'books' array.
+
   return (
     <div className="space-y-6">
       <div className="relative">
@@ -12,8 +26,9 @@ export default function DiscoverPage() {
         <Input placeholder="Search for books or authors..." className="pl-10 w-full md:w-1/2 lg:w-1/3" />
       </div>
 
+      {isLoading && <div>Loading books...</div>}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-        {books.map((book) => (
+        {books?.map((book) => (
           <Card key={book.id} className="overflow-hidden group transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
             <CardContent className="p-0">
               <Image

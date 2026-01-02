@@ -1,24 +1,30 @@
+
 "use client";
 
-import type { Book, Chapter, DiscussionPost, User } from "@/lib/types";
-import { useFormState } from "react-dom";
+import type { Book, Chapter, DiscussionPost, User, UserNote } from "@/lib/types";
 import { getAIDiscussionPrompts, getAIDiscussionSummary } from "@/app/actions";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import { currentUser, users } from "@/lib/data";
 import { Separator } from "./ui/separator";
-import React, { useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { Loader2, Sparkles, Trash2 } from "lucide-react";
+import { collection, doc, query, where } from "firebase/firestore";
+import { addDocumentNonBlocking, deleteDocumentNonBlocking, useCollection, useFirebase, useUser } from "@/firebase";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { useForm, SubmitHandler } from "react-hook-form";
 
 interface DiscussionSectionProps {
   chapter: Chapter;
-  book: Book;
+  book: Book & { id: string };
 }
 
 function Comment({ post }: { post: DiscussionPost }) {
-    const user = users.find(u => u.id === post.userId);
+    const { firestore } = useFirebase();
+    const userRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', post.userId) : null, [firestore, post.userId]);
+    const { data: user } = useDoc<User>(userRef);
+
     if (!user) return null;
 
     return (
@@ -33,17 +39,94 @@ function Comment({ post }: { post: DiscussionPost }) {
                     <p className="text-xs text-muted-foreground">{new Date(post.timestamp).toLocaleDateString()}</p>
                 </div>
                 <p className="text-sm">{post.content}</p>
-                 {post.replies.map(reply => <Comment key={reply.id} post={reply} />)}
+                 {post.replies?.map(reply => <Comment key={reply.id} post={reply} />)}
+            </div>
+        </div>
+    )
+}
+
+function MyNotesSection({ bookId, chapterId }: { bookId: string; chapterId: string; }) {
+    const { firestore } = useFirebase();
+    const { user } = useUser();
+    const { register, handleSubmit, reset } = useForm<{ content: string }>();
+
+    const notesQuery = useMemoFirebase(() => {
+        if (!firestore || !user) return null;
+        return query(
+            collection(firestore, "userNotes"),
+            where("userId", "==", user.uid),
+            where("bookId", "==", bookId),
+            where("chapterId", "==", chapterId)
+        );
+    }, [firestore, user, bookId, chapterId]);
+
+    const { data: notes, isLoading } = useCollection<UserNote>(notesQuery);
+
+    const notesCollectionRef = useMemoFirebase(
+      () => firestore ? collection(firestore, 'userNotes') : null,
+      [firestore]
+    );
+
+    const onSubmit: SubmitHandler<{ content: string }> = async (data) => {
+        if (!user || !notesCollectionRef) return;
+        
+        const newNote: Omit<UserNote, 'id'> = {
+            userId: user.uid,
+            bookId,
+            chapterId,
+            content: data.content,
+            createdAt: new Date().toISOString()
+        };
+
+        addDocumentNonBlocking(notesCollectionRef, newNote);
+        reset();
+    };
+
+    const handleDeleteNote = (noteId: string) => {
+        if (!firestore) return;
+        const noteRef = doc(firestore, "userNotes", noteId);
+        deleteDocumentNonBlocking(noteRef);
+    }
+
+    return (
+        <div className="space-y-4">
+             <form onSubmit={handleSubmit(onSubmit)} className="space-y-2">
+                <Textarea placeholder="Add a private note..." {...register("content", { required: true })} />
+                <Button type="submit">Save Note</Button>
+            </form>
+
+            <Separator />
+            
+            {isLoading && <p>Loading notes...</p>}
+            <div className="space-y-3">
+                 {notes?.map(note => (
+                    <Card key={note.id} className="bg-secondary/50">
+                        <CardContent className="p-4 text-sm flex justify-between items-start">
+                           <p>{note.content}</p>
+                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteNote(note.id)}>
+                                <Trash2 className="h-4 w-4" />
+                           </Button>
+                        </CardContent>
+                    </Card>
+                ))}
+                {notes?.length === 0 && <p className="text-xs text-muted-foreground">Your private notes for this chapter will appear here.</p>}
             </div>
         </div>
     )
 }
 
 export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
+  const { firestore, useMemoFirebase } = useFirebase();
   const [prompts, setPrompts] = useState<string[] | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [isPromptsLoading, setPromptsLoading] = useState(false);
   const [isSummaryLoading, setSummaryLoading] = useState(false);
+
+  const discussionCollectionRef = useMemoFirebase(
+    () => (firestore ? collection(firestore, "books", book.id, "chapters", chapter.id, "discussion") : null),
+    [firestore, book.id, chapter.id]
+  );
+  const { data: discussion, isLoading } = useCollection<DiscussionPost>(discussionCollectionRef);
 
   const handleGeneratePrompts = async () => {
     setPromptsLoading(true);
@@ -63,9 +146,10 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
   };
   
   const handleGenerateSummary = async () => {
+    if (!discussion) return;
     setSummaryLoading(true);
     setSummary(null);
-    const discussionText = chapter.discussion.map(p => `${users.find(u=>u.id===p.userId)?.name}: ${p.content}`).join('\n');
+    const discussionText = discussion.map(p => `${p.userId}: ${p.content}`).join('\n');
     try {
       const result = await getAIDiscussionSummary({
         chapterText: chapter.content,
@@ -87,7 +171,7 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
           {isPromptsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
           Spark Conversation
         </Button>
-        <Button variant="secondary" onClick={handleGenerateSummary} disabled={isSummaryLoading || chapter.discussion.length === 0}>
+        <Button variant="secondary" onClick={handleGenerateSummary} disabled={isSummaryLoading || (discussion?.length || 0) === 0}>
            {isSummaryLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Summarize Discussion
         </Button>
@@ -123,24 +207,28 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
 
       <Separator />
 
-      <h4 className="font-bold text-lg">Comments ({chapter.discussion.length})</h4>
-      <div className="space-y-4">
-        {chapter.discussion.map((post) => (
-            <Comment key={post.id} post={post} />
-        ))}
-        {chapter.discussion.length === 0 && <p className="text-sm text-muted-foreground">No comments yet. Be the first to start the discussion!</p>}
-      </div>
-      
-      <div className="flex gap-3 items-start">
-        <Avatar>
-            <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} />
-            <AvatarFallback>{currentUser.name.charAt(0)}</AvatarFallback>
-        </Avatar>
-        <form className="flex-1 space-y-2">
-            <Textarea placeholder="Add your thoughts..." rows={3} />
-            <Button>Post Comment</Button>
-        </form>
-      </div>
+        <Tabs defaultValue="comments" className="w-full">
+            <TabsList>
+                <TabsTrigger value="comments">Comments ({discussion?.length || 0})</TabsTrigger>
+                <TabsTrigger value="notes">My Notes</TabsTrigger>
+            </TabsList>
+            <TabsContent value="comments" className="pt-4">
+                <div className="space-y-4">
+                {isLoading && <p>Loading comments...</p>}
+                {discussion?.map((post) => (
+                    <Comment key={post.id} post={post} />
+                ))}
+                {(discussion?.length || 0) === 0 && <p className="text-sm text-muted-foreground">No comments yet. Be the first to start the discussion!</p>}
+                </div>
+                
+                <div className="flex gap-3 items-start mt-6">
+                    {/* Comment form would go here */}
+                </div>
+            </TabsContent>
+            <TabsContent value="notes" className="pt-4">
+                <MyNotesSection bookId={book.id} chapterId={chapter.id} />
+            </TabsContent>
+        </Tabs>
     </div>
   );
 }

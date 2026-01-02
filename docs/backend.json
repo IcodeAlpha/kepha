@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -164,6 +165,42 @@
         "id",
         "bookClubId"
       ]
+    },
+    "UserNote": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserNote",
+      "type": "object",
+      "description": "Represents a private note a user has taken for a specific book chapter.",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who wrote the note."
+        },
+        "bookId": {
+          "type": "string",
+          "description": "The ID of the book the note is for."
+        },
+        "chapterId": {
+          "type": "string",
+          "description": "The ID of the chapter the note is for."
+        },
+        "content": {
+          "type": "string",
+          "description": "The content of the note."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the note was created.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "userId",
+        "bookId",
+        "chapterId",
+        "content",
+        "createdAt"
+      ]
     }
   },
   "auth": {
@@ -197,7 +234,7 @@
           "schema": {
             "$ref": "#/backend/entities/BookClub"
           },
-          "description": "Stores book club information. Includes denormalized 'ownerId' field for authorization independence.",
+          "description": "Stores book club information. Includes denormalized 'ownerId' and 'memberIds' fields for authorization.",
           "params": [
             {
               "name": "bookClubId",
@@ -229,7 +266,7 @@
           "schema": {
             "$ref": "#/backend/entities/Discussion"
           },
-          "description": "Stores discussion information for a specific book club. Includes denormalized 'bookClubId' for authorization independence.",
+          "description": "Stores discussion information for a specific book club. Access is inherited from the parent book club.",
           "params": [
             {
               "name": "bookClubId",
@@ -243,26 +280,21 @@
         }
       },
       {
-        "path": "/bookClubMembers/{bookClubId}/{userId}",
+        "path": "/userNotes/{noteId}",
         "definition": {
-          "entityName": "BookClubMember",
+          "entityName": "UserNote",
           "schema": {
-            "$ref": "#/backend/entities/User"
+            "$ref": "#/backend/entities/UserNote"
           },
-          "description": "Used for managing user participation in BookClubs. Document existence indicates a user is a member.",
+          "description": "Stores private user notes for book chapters. Only the user can access their own notes.",
           "params": [
             {
-              "name": "bookClubId",
-              "description": "The unique identifier of the book club."
-            },
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user."
+              "name": "noteId",
+              "description": "The unique identifier of the note."
             }
           ]
         }
       }
-    ],
-    "reasoning": "This Firestore structure prioritizes authorization independence and QAPs using denormalization and structural segregation. User data is stored under `/users/{userId}` for private data access. Book Clubs are located in the `/bookClubs/{bookClubId}` collection. The structure enforces that the `ownerId` of a `BookClub` is denormalized within the document itself to ensure rule efficiency and eliminate the need for `get()` calls for authorization. The `memberIds` array is intentionally excluded from denormalization; instead, access control for joining and participating is handled via separate existence checks on `/bookClubMembers/{bookClubId}/{userId}`. Discussions are stored in `/bookClubs/{bookClubId}/discussions/{discussionId}`, with the `bookClubId` being denormalized to each Discussion document. This design supports secure list operations (QAPs) by ensuring that each collection contains documents with homogeneous security requirements. Private user data is segregated, and collaborative data uses a membership model."
+    ]
   }
 }

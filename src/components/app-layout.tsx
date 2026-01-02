@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -34,9 +35,10 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { currentUser } from "@/lib/data";
 import { Logo } from "./logo";
-import { Toaster } from "./ui/toaster";
+import { useUser } from "@/firebase";
+import { initiateAnonymousSignIn } from "@/firebase/non-blocking-login";
+import { getAuth } from "firebase/auth";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -47,6 +49,28 @@ const navItems = [
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { user, isUserLoading } = useUser();
+
+  if (isUserLoading) {
+    // You can render a loading skeleton here
+    return (
+       <div className="flex items-center justify-center h-screen">
+        <div className="flex items-center gap-2">
+          <Book className="h-8 w-8 animate-pulse text-primary" />
+          <span className="text-2xl font-bold">Kepha</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    initiateAnonymousSignIn(getAuth());
+    return (
+       <div className="flex items-center justify-center h-screen">
+         <p>Signing in...</p>
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>
@@ -60,7 +84,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <SidebarMenuItem key={item.href}>
                 <Link href={item.href}>
                   <SidebarMenuButton
-                    isActive={pathname === item.href}
+                    isActive={pathname.startsWith(item.href)}
                     tooltip={item.label}
                   >
                     <item.icon />
@@ -91,6 +115,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 function UserMenu() {
+    const { user } = useUser();
+    if (!user) return null;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -99,9 +126,9 @@ function UserMenu() {
           className="relative h-10 w-10 rounded-full"
         >
           <Avatar className="h-10 w-10">
-            <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} />
+            <AvatarImage src={user.photoURL || undefined} alt={user.displayName || ""} />
             <AvatarFallback>
-              {currentUser.name.charAt(0).toUpperCase()}
+              {user.displayName ? user.displayName.charAt(0).toUpperCase() : user.email?.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
         </Button>
@@ -109,17 +136,19 @@ function UserMenu() {
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{currentUser.name}</p>
+            <p className="text-sm font-medium leading-none">{user.displayName || "Anonymous User"}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              {currentUser.id}@kepha.com
+              {user.email || user.uid}
             </p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
-          <UserIcon className="mr-2 h-4 w-4" />
-          <span>Profile</span>
-        </DropdownMenuItem>
+        <Link href="/profile">
+            <DropdownMenuItem>
+                <UserIcon className="mr-2 h-4 w-4" />
+                <span>Profile</span>
+            </DropdownMenuItem>
+        </Link>
         <DropdownMenuItem>
           <Settings className="mr-2 h-4 w-4" />
           <span>Settings</span>

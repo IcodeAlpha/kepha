@@ -1,3 +1,4 @@
+
 export type User = {
   id: string;
   name: string;
@@ -9,7 +10,7 @@ export type DiscussionPost = {
   userId: string;
   content: string;
   timestamp: string;
-  replies: DiscussionPost[];
+  replies?: DiscussionPost[];
 };
 
 export type Chapter = {
@@ -27,7 +28,7 @@ export type Book = {
   coverUrl: string;
   coverHint: string;
   summary: string;
-  chapters: Chapter[];
+  chapters?: Chapter[];
 };
 
 export type Club = {
@@ -38,3 +39,12 @@ export type Club = {
   bookId: string;
   memberIds: string[];
 };
+
+export type UserNote = {
+  id: string;
+  userId: string;
+  bookId: string;
+  chapterId: string;
+  content: string;
+  createdAt: string;
+}
