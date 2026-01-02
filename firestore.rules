@@ -12,27 +12,27 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // --- RULES ---
+
     // USERS
-    // Allow anyone to create a user document (for seeding)
-    // Signed-in users can read and write to their own document.
+    // - Authenticated users can read/write their own profile.
+    // - Seeding: Allow creation of any user doc if unauthenticated.
     match /users/{userId} {
       allow read, write: if isOwner(userId);
-      allow create: if true; // Allows seeding
+      allow create: if request.auth == null;
     }
 
     // BOOKS
-    // Books and chapters are publicly readable.
-    // Writes are only allowed during seeding (unauthenticated).
+    // - Books and chapters are publicly readable.
+    // - Seeding: Allow writing to books and subcollections if unauthenticated.
     match /books/{bookId} {
       allow get, list: if true;
       allow write: if request.auth == null;
 
-      // CHAPTERS (subcollection of books)
       match /chapters/{chapterId} {
         allow get, list: if true;
         allow write: if request.auth == null;
 
-        // DISCUSSION (subcollection of chapters)
         match /discussion/{postId} {
           allow read: if isSignedIn();
           allow create: if isSignedIn();
@@ -43,31 +43,32 @@ service cloud.firestore {
     }
 
     // BOOK CLUBS
-    // Allow reading clubs for any signed-in user.
-    // Creation is allowed for signed-in users or during seeding.
-    // Updates/deletes are restricted to the owner.
+    // - Any signed-in user can list clubs.
+    // - A user can get a specific club if they are a member or the owner.
+    // - Seeding: Allow creation if unauthenticated.
+    // - Only the owner can update or delete a club.
     match /bookClubs/{clubId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn() && (request.auth.uid in resource.data.memberIds || resource.data.ownerId == request.auth.uid);
-      allow create: if isSignedIn() || request.auth == null;
+      allow create: if request.auth == null;
       allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
 
       // MEMBERS (subcollection of bookClubs)
-      // Members can be read by other members.
-      // Creation/deletion is handled by club joining logic or seeding.
+      // - A member of a club can see the other members.
+      // - Seeding: Allow creation if unauthenticated.
+      // - The club owner can add/remove members. A user can remove themselves.
       match /members/{userId} {
-        allow read: if isSignedIn() && exists(/databases/$(database)/documents/bookClubs/$(clubId)/members/$(request.auth.uid));
+        allow get, list: if isSignedIn() && exists(/databases/$(database)/documents/bookClubs/$(clubId)) && request.auth.uid in get(/databases/$(database)/documents/bookClubs/$(clubId)).data.memberIds;
         allow create, delete: if request.auth == null || isOwner(userId) || get(/databases/$(database)/documents/bookClubs/$(clubId)).data.ownerId == request.auth.uid;
       }
     }
     
     // USER NOTES
-    // Users can only manage their own notes. Creation allowed for users or seeding.
+    // - Users can only manage their own notes.
+    // - Seeding: Allow creation if unauthenticated.
     match /userNotes/{noteId} {
         allow read, update, delete: if isOwner(resource.data.userId);
-        allow create: if isOwner(request.resource.data.userId) || request.auth == null;
+        allow create: if (isSignedIn() && isOwner(request.resource.data.userId)) || request.auth == null;
     }
   }
 }
-
-    
