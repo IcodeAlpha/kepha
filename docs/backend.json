@@ -1,0 +1,268 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user within the Kepha application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user."
+        },
+        "username": {
+          "type": "string",
+          "description": "User's chosen username."
+        },
+        "email": {
+          "type": "string",
+          "description": "User's email address.",
+          "format": "email"
+        },
+        "profilePicture": {
+          "type": "string",
+          "description": "URL to the user's profile picture.",
+          "format": "uri"
+        },
+        "bio": {
+          "type": "string",
+          "description": "A short biography of the user."
+        }
+      },
+      "required": [
+        "id",
+        "username",
+        "email"
+      ]
+    },
+    "BookClub": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "BookClub",
+      "type": "object",
+      "description": "Represents a book club within the Kepha application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the book club."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the book club."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the book club."
+        },
+        "bookId": {
+          "type": "string",
+          "description": "Reference to the Book being read. (Relationship: Book 1:N BookClub)"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Reference to the User who owns the BookClub. (Relationship: User 1:N BookClub)"
+        },
+        "memberIds": {
+          "type": "array",
+          "description": "References to Users who are members. (Relationship: User N:N BookClub)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of when the book club was created.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "ownerId",
+        "createdAt"
+      ]
+    },
+    "Book": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Book",
+      "type": "object",
+      "description": "Represents a book within the Kepha application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the book."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the book."
+        },
+        "author": {
+          "type": "string",
+          "description": "Author of the book."
+        },
+        "coverImage": {
+          "type": "string",
+          "description": "URL to the book's cover image.",
+          "format": "uri"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the book."
+        },
+        "genre": {
+          "type": "string",
+          "description": "Genre of the book."
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "author"
+      ]
+    },
+    "Discussion": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Discussion",
+      "type": "object",
+      "description": "Represents a discussion within a book club, related to a specific chapter or theme.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the discussion."
+        },
+        "bookClubId": {
+          "type": "string",
+          "description": "Reference to the BookClub this discussion belongs to. (Relationship: BookClub 1:N Discussion)"
+        },
+        "chapterNumber": {
+          "type": "number",
+          "description": "The chapter number this discussion pertains to."
+        },
+        "theme": {
+          "type": "string",
+          "description": "Theme of the discussion, if not chapter-specific."
+        },
+        "startTime": {
+          "type": "string",
+          "description": "Scheduled start time of the discussion.",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "description": "Scheduled end time of the discussion.",
+          "format": "date-time"
+        },
+        "userIds": {
+          "type": "array",
+          "description": "References to Users participating in the discussion. (Relationship: User N:N Discussion)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "bookClubId"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profile data. Only the user can read/write their own profile.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/bookClubs/{bookClubId}",
+        "definition": {
+          "entityName": "BookClub",
+          "schema": {
+            "$ref": "#/backend/entities/BookClub"
+          },
+          "description": "Stores book club information. Includes denormalized 'ownerId' field for authorization independence.",
+          "params": [
+            {
+              "name": "bookClubId",
+              "description": "The unique identifier of the book club."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/books/{bookId}",
+        "definition": {
+          "entityName": "Book",
+          "schema": {
+            "$ref": "#/backend/entities/Book"
+          },
+          "description": "Stores book information. Public read access.",
+          "params": [
+            {
+              "name": "bookId",
+              "description": "The unique identifier of the book."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/bookClubs/{bookClubId}/discussions/{discussionId}",
+        "definition": {
+          "entityName": "Discussion",
+          "schema": {
+            "$ref": "#/backend/entities/Discussion"
+          },
+          "description": "Stores discussion information for a specific book club. Includes denormalized 'bookClubId' for authorization independence.",
+          "params": [
+            {
+              "name": "bookClubId",
+              "description": "The unique identifier of the book club."
+            },
+            {
+              "name": "discussionId",
+              "description": "The unique identifier of the discussion."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/bookClubMembers/{bookClubId}/{userId}",
+        "definition": {
+          "entityName": "BookClubMember",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Used for managing user participation in BookClubs. Document existence indicates a user is a member.",
+          "params": [
+            {
+              "name": "bookClubId",
+              "description": "The unique identifier of the book club."
+            },
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "This Firestore structure prioritizes authorization independence and QAPs using denormalization and structural segregation. User data is stored under `/users/{userId}` for private data access. Book Clubs are located in the `/bookClubs/{bookClubId}` collection. The structure enforces that the `ownerId` of a `BookClub` is denormalized within the document itself to ensure rule efficiency and eliminate the need for `get()` calls for authorization. The `memberIds` array is intentionally excluded from denormalization; instead, access control for joining and participating is handled via separate existence checks on `/bookClubMembers/{bookClubId}/{userId}`. Discussions are stored in `/bookClubs/{bookClubId}/discussions/{discussionId}`, with the `bookClubId` being denormalized to each Discussion document. This design supports secure list operations (QAPs) by ensuring that each collection contains documents with homogeneous security requirements. Private user data is segregated, and collaborative data uses a membership model."
+  }
+}
