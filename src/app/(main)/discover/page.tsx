@@ -1,140 +1,38 @@
 'use client';
 import Image from "next/image";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Loader2, Search, Sparkles } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import type { Book } from "@/lib/types";
 import React, { useState, useEffect, useTransition } from "react";
-import { getAIRecommendations, searchBooks } from "@/app/actions";
-import { Separator } from "@/components/ui/separator";
 import { books as allBooks } from "@/lib/data";
-
-type RecommendedBook = {
-    id: string;
-    title: string;
-    author: string;
-    reason: string;
-    coverUrl: string;
-    coverHint: string;
-};
-
-// Mock user's reading history
-const myReadBooks = [
-    { title: 'Dune', author: 'Frank Herbert' },
-];
-
-function AIRecommendations() {
-    const [recommendations, setRecommendations] = useState<RecommendedBook[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    
-    useEffect(() => {
-        const fetchRecommendations = async () => {
-            setIsLoading(true);
-
-            const availableBooks = allBooks.map(b => ({ id: b.id, title: b.title, author: b.author }));
-
-            try {
-                const result = await getAIRecommendations({ readBooks: myReadBooks, availableBooks });
-                const enrichedRecommendations = result.recommendations.map(rec => {
-                    const bookDetails = allBooks.find(b => b.id === rec.id);
-                    return { ...rec, ...bookDetails };
-                }) as RecommendedBook[];
-                setRecommendations(enrichedRecommendations);
-            } catch (error) {
-                console.error("Failed to fetch recommendations:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchRecommendations();
-    }, []);
-
-    if (isLoading) {
-        return (
-            <div className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <span>Finding books just for you...</span>
-            </div>
-        )
-    }
-
-    if (recommendations.length === 0) {
-        return null; 
-    }
-
-    return (
-        <div className="space-y-4">
-            <div className="flex items-center gap-2">
-                <Sparkles className="h-6 w-6 text-primary" />
-                <h2 className="text-2xl font-bold">Recommended For You</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {recommendations.map((book) => (
-                    <Card key={book.id} className="flex flex-col">
-                        <CardHeader className="flex-row items-start gap-4">
-                             <Image
-                                src={book.coverUrl}
-                                alt={`Cover of ${book.title}`}
-                                width={80}
-                                height={120}
-                                className="rounded-md shadow-lg"
-                                data-ai-hint={book.coverHint}
-                            />
-                            <div className="flex-1">
-                                <CardTitle>{book.title}</CardTitle>
-                                <CardDescription>by {book.author}</CardDescription>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="flex-grow">
-                             <p className="text-sm text-muted-foreground italic">"{book.reason}"</p>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
-        </div>
-    )
-}
 
 export default function DiscoverPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [displayedBooks, setDisplayedBooks] = useState<Book[]>([]);
+  const [displayedBooks, setDisplayedBooks] = useState<Book[]>(allBooks);
   const [isSearching, startSearchTransition] = useTransition();
-
-  useEffect(() => {
-    // Fetch initial books on mount
-    const fetchInitialBooks = async () => {
-      startSearchTransition(async () => {
-        const results = await searchBooks('classic literature');
-        setDisplayedBooks(results);
-      });
-    };
-    fetchInitialBooks();
-  }, []);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setSearchTerm(query);
-    startSearchTransition(async () => {
-        if (query.trim().length > 2) {
-            const results = await searchBooks(query);
+    startSearchTransition(() => {
+        if (query.trim().length > 0) {
+            const results = allBooks.filter(book => 
+                book.title.toLowerCase().includes(query.toLowerCase()) ||
+                book.author.toLowerCase().includes(query.toLowerCase())
+            );
             setDisplayedBooks(results);
-        } else if (query.trim().length === 0) {
-            // Optional: revert to initial list when search is cleared
-            const results = await searchBooks('classic literature');
-            setDisplayedBooks(results);
+        } else {
+            setDisplayedBooks(allBooks);
         }
     });
   }
 
   return (
     <div className="space-y-8">
-        <AIRecommendations />
-
-        <Separator />
-      
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                 <h2 className="text-2xl font-bold">{searchTerm.trim() === '' ? 'Featured Books' : 'Search Results'}</h2>
+                 <h2 className="text-2xl font-bold">{searchTerm.trim() === '' ? 'All Books' : 'Search Results'}</h2>
                 {isSearching && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
             </div>
             <div className="relative">
