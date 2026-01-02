@@ -46,7 +46,12 @@ const summarizeChapterDiscussionsFlow = ai.defineFlow(
     outputSchema: SummarizeChapterDiscussionsOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return output!;
+    try {
+      const {output} = await prompt(input);
+      return output || { summary: '' };
+    } catch (e) {
+      console.error("Error in summarizeChapterDiscussionsFlow, returning empty summary.", e);
+      return { summary: '' };
+    }
   }
 );
