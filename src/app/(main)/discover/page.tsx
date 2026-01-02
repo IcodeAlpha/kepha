@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, Sparkles } from "lucide-react";
 import type { Book } from "@/lib/types";
-import React, { useMemo, useState, useEffect, useTransition } from "react";
+import React, { useState, useEffect, useTransition } from "react";
 import { getAIRecommendations, searchBooks } from "@/app/actions";
 import { Separator } from "@/components/ui/separator";
 import { books as allBooks } from "@/lib/data";
@@ -97,7 +97,7 @@ function AIRecommendations() {
 
 export default function DiscoverPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<Book[]>([]);
+  const [searchResults, setSearchResults] = useState<Book[] | null>(null);
   const [isSearching, startSearchTransition] = useTransition();
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,12 +108,12 @@ export default function DiscoverPage() {
             const results = await searchBooks(query);
             setSearchResults(results);
         } else {
-            setSearchResults([]);
+            setSearchResults(null);
         }
     });
   }
 
-  const displayedBooks = searchTerm.trim().length > 0 ? searchResults : allBooks;
+  const displayedBooks = searchResults === null ? allBooks : searchResults;
 
   return (
     <div className="space-y-8">
@@ -123,7 +123,7 @@ export default function DiscoverPage() {
       
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                 <h2 className="text-2xl font-bold">{searchTerm.trim().length > 0 ? 'Search Results' : 'All Books'}</h2>
+                 <h2 className="text-2xl font-bold">{searchResults === null ? 'Featured Books' : 'Search Results'}</h2>
                 {isSearching && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
             </div>
             <div className="relative">
