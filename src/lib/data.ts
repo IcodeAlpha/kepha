@@ -1,6 +1,12 @@
 
 import type { User, Book, Club, Chapter, DiscussionPost } from './types';
 
+export const users: (User & { id: string })[] = [
+    { id: 'user-1', name: 'Alex', avatarUrl: 'https://picsum.photos/seed/user-1/100/100' },
+    { id: 'user-2', name: 'Brenda', avatarUrl: 'https://picsum.photos/seed/user-2/100/100' },
+    { id: 'user-3', name: 'Charlie', avatarUrl: 'https://picsum.photos/seed/user-3/100/100' },
+];
+
 const defaultDiscussion: DiscussionPost[] = [
     { id: 'd-1-1', userId: 'user-2', content: "What a powerful opening! The sense of foreboding is palpable.", timestamp: '2024-05-20T10:00:00Z', replies: []},
     { id: 'd-1-2', userId: 'user-3', content: "I agree. The political intrigue is set up so well from the very first page.", timestamp: '2024-05-20T11:30:00Z', replies: [

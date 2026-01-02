@@ -1,4 +1,3 @@
-
 'use client';
 import Link from "next/link";
 import Image from "next/image";
@@ -12,30 +11,35 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { useCollection, useDoc, useFirebase, useUser, useMemoFirebase } from "@/firebase";
-import { collection, doc, query, where } from "firebase/firestore";
+import { useUser } from "@/firebase";
+import { books, users as mockUsers } from "@/lib/data";
 import type { Book, Club, User } from "@/lib/types";
-import { useMemo } from "react";
+
+const myClubs: (Club & { id: string })[] = [
+    {
+        id: 'dune-disciples',
+        name: 'Dune Disciples',
+        description: 'A club for fans of Frank Herbert\'s masterpiece.',
+        isPublic: true,
+        bookId: 'dune',
+        memberIds: ['user-1', 'user-2', 'user-3'],
+    },
+    {
+        id: 'jane-austen-fans',
+        name: 'Jane Austen Fans',
+        description: 'Discussing the works of Jane Austen.',
+        isPublic: true,
+        bookId: 'pride-and-prejudice',
+        memberIds: ['user-1', 'user-3'],
+    }
+];
+
 
 function MyClubCard({ club }: { club: Club & { id: string } }) {
-  const { firestore } = useFirebase();
+  const book = books.find(b => b.id === club.bookId);
+  const members = mockUsers.filter(u => club.memberIds.includes(u.id));
 
-  const bookRef = useMemoFirebase(
-    () => (firestore && club.bookId ? doc(firestore, "books", club.bookId) : null),
-    [firestore, club.bookId]
-  );
-  const { data: book } = useDoc<Book>(bookRef);
-
-  const membersCollectionRef = useMemoFirebase(
-    () =>
-      firestore
-        ? collection(firestore, "bookClubs", club.id, "members")
-        : null,
-    [firestore, club.id]
-  );
-  const { data: members } = useCollection<User>(membersCollectionRef);
-
-  if (!book) return null; // or skeleton
+  if (!book) return null;
 
   const readingProgress = Math.floor(Math.random() * 100);
 
@@ -79,20 +83,9 @@ function MyClubCard({ club }: { club: Club & { id: string } }) {
 }
 
 export default function DashboardPage() {
-  const { firestore } = useFirebase();
   const { user, isUserLoading } = useUser();
 
-  const myClubsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'bookClubs'),
-      where('memberIds', 'array-contains', user.uid)
-    );
-  }, [firestore, user]);
-
-  const { data: myClubs, isLoading: areClubsLoading } = useCollection<Club>(myClubsQuery);
-
-  if (isUserLoading || areClubsLoading) {
+  if (isUserLoading) {
     return <div>Loading...</div> // TODO: Skeleton loader
   }
 

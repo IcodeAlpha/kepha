@@ -1,4 +1,3 @@
-
 'use client';
 import Link from "next/link";
 import Image from "next/image";
@@ -12,29 +11,31 @@ import {
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { useCollection, useFirebase, useMemoFirebase } from "@/firebase";
+import { books, users as mockUsers } from "@/lib/data";
 import type { Book, Club, User } from "@/lib/types";
-import { collection, doc } from "firebase/firestore";
-import { useMemo } from "react";
-import { useDoc } from "@/firebase/firestore/use-doc";
+
+const allClubs: (Club & { id: string })[] = [
+    {
+        id: 'dune-disciples',
+        name: 'Dune Disciples',
+        description: 'A club for fans of Frank Herbert\'s masterpiece.',
+        isPublic: true,
+        bookId: 'dune',
+        memberIds: ['user-1', 'user-2', 'user-3'],
+    },
+    {
+        id: 'jane-austen-fans',
+        name: 'Jane Austen Fans',
+        description: 'Discussing the works of Jane Austen.',
+        isPublic: true,
+        bookId: 'pride-and-prejudice',
+        memberIds: ['user-1', 'user-3'],
+    }
+];
 
 function ClubCard({ club }: { club: Club & { id: string } }) {
-  const { firestore } = useFirebase();
-
-  const bookRef = useMemoFirebase(
-    () => (firestore && club.bookId ? doc(firestore, "books", club.bookId) : null),
-    [firestore, club.bookId]
-  );
-  const { data: book } = useDoc<Book>(bookRef);
-
-  const membersCollectionRef = useMemoFirebase(
-    () =>
-      firestore
-        ? collection(firestore, "bookClubs", club.id, "members")
-        : null,
-    [firestore, club.id]
-  );
-  const { data: members } = useCollection<User>(membersCollectionRef);
+  const book = books.find(b => b.id === club.bookId);
+  const members = mockUsers.filter(u => club.memberIds.includes(u.id));
 
   if (!book) return null; // Or a loading skeleton
 
@@ -85,17 +86,7 @@ function ClubCard({ club }: { club: Club & { id: string } }) {
 
 
 export default function ClubsPage() {
-  const { firestore } = useFirebase();
-  const clubsCollectionRef = useMemoFirebase(
-    () => (firestore ? collection(firestore, "bookClubs") : null),
-    [firestore]
-  );
-  // Note: This fetches all clubs. For a real app, you'd want public clubs only and pagination.
-  const { data: clubs, isLoading } = useCollection<Club>(clubsCollectionRef);
-
-  if (isLoading) {
-    return <div>Loading clubs...</div>
-  }
+  const clubs = allClubs;
 
   return (
     <div className="space-y-6">

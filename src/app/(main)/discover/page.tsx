@@ -1,15 +1,13 @@
-
 'use client';
 import Image from "next/image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, Sparkles } from "lucide-react";
-import { useCollection, useDoc, useFirebase, useUser, useMemoFirebase } from "@/firebase";
-import { collection, doc, query, where } from "firebase/firestore";
-import type { Book, Club } from "@/lib/types";
+import type { Book } from "@/lib/types";
 import React, { useMemo, useState, useEffect } from "react";
 import { getAIRecommendations } from "@/app/actions";
 import { Separator } from "@/components/ui/separator";
+import { books as allBooks } from "@/lib/data";
 
 type RecommendedBook = {
     id: string;
@@ -20,53 +18,36 @@ type RecommendedBook = {
     coverHint: string;
 };
 
+// Mock user's reading history
+const myReadBooks = [
+    { title: 'Dune', author: 'Frank Herbert' },
+];
+
 function AIRecommendations() {
-    const { firestore } = useFirebase();
-    const { user } = useUser();
     const [recommendations, setRecommendations] = useState<RecommendedBook[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     
-    const myClubsQuery = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        return query(
-        collection(firestore, 'bookClubs'),
-        where('memberIds', 'array-contains', user.uid)
-        );
-    }, [firestore, user]);
-    const { data: myClubs } = useCollection<Club>(myClubsQuery);
-
-    const allBooksCollectionRef = useMemoFirebase(
-        () => (firestore ? collection(firestore, "books") : null),
-        [firestore]
-    );
-    const { data: allBooks } = useCollection<Book>(allBooksCollectionRef);
-
     useEffect(() => {
-        if (myClubs && allBooks && myClubs.length > 0) {
-            const fetchRecommendations = async () => {
-                setIsLoading(true);
+        const fetchRecommendations = async () => {
+            setIsLoading(true);
 
-                const readBookIds = new Set(myClubs.map(club => club.bookId));
-                const readBooks = allBooks.filter(book => readBookIds.has(book.id)).map(b => ({ title: b.title, author: b.author }));
-                const availableBooks = allBooks.map(b => ({ id: b.id, title: b.title, author: b.author }));
+            const availableBooks = allBooks.map(b => ({ id: b.id, title: b.title, author: b.author }));
 
-                try {
-                    const result = await getAIRecommendations({ readBooks, availableBooks });
-                    // Join with allBooks to get coverUrl and coverHint
-                    const enrichedRecommendations = result.recommendations.map(rec => {
-                        const bookDetails = allBooks.find(b => b.id === rec.id);
-                        return { ...rec, ...bookDetails };
-                    }) as RecommendedBook[];
-                    setRecommendations(enrichedRecommendations);
-                } catch (error) {
-                    console.error("Failed to fetch recommendations:", error);
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-            fetchRecommendations();
-        }
-    }, [myClubs, allBooks]);
+            try {
+                const result = await getAIRecommendations({ readBooks: myReadBooks, availableBooks });
+                const enrichedRecommendations = result.recommendations.map(rec => {
+                    const bookDetails = allBooks.find(b => b.id === rec.id);
+                    return { ...rec, ...bookDetails };
+                }) as RecommendedBook[];
+                setRecommendations(enrichedRecommendations);
+            } catch (error) {
+                console.error("Failed to fetch recommendations:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchRecommendations();
+    }, []);
 
     if (isLoading) {
         return (
@@ -78,7 +59,7 @@ function AIRecommendations() {
     }
 
     if (recommendations.length === 0) {
-        return null; // Don't show the section if there are no recommendations
+        return null; 
     }
 
     return (
@@ -115,22 +96,15 @@ function AIRecommendations() {
 }
 
 export default function DiscoverPage() {
-  const { firestore } = useFirebase();
   const [searchTerm, setSearchTerm] = useState("");
 
-  const booksCollectionRef = useMemoFirebase(
-    () => (firestore ? collection(firestore, "books") : null),
-    [firestore]
-  );
-  const { data: books, isLoading } = useCollection<Book>(booksCollectionRef);
-
   const filteredBooks = useMemo(() => {
-    if (!books) return [];
-    return books.filter(book => 
+    if (!allBooks) return [];
+    return allBooks.filter(book => 
         book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         book.author.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [books, searchTerm]);
+  }, [allBooks, searchTerm]);
 
 
   return (
@@ -151,7 +125,6 @@ export default function DiscoverPage() {
                 />
             </div>
 
-            {isLoading && <div>Loading books...</div>}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                 {filteredBooks?.map((book) => (
                 <Card key={book.id} className="overflow-hidden group transition-all duration-300 hover:shadow-xl hover:-translate-y-1">

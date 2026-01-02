@@ -1,4 +1,3 @@
-
 'use client';
 
 import Image from "next/image";
@@ -21,40 +20,39 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { DiscussionSection } from "@/components/discussion-section";
-import { useCollection, useDoc, useFirebase, useMemoFirebase } from "@/firebase";
-import { doc, collection } from "firebase/firestore";
 import type { Book, Club, User } from "@/lib/types";
+import { books, users } from "@/lib/data";
+
+const allClubs: (Club & { id: string })[] = [
+    {
+        id: 'dune-disciples',
+        name: 'Dune Disciples',
+        description: 'A club for fans of Frank Herbert\'s masterpiece.',
+        isPublic: true,
+        bookId: 'dune',
+        memberIds: ['user-1', 'user-2', 'user-3'],
+    },
+    {
+        id: 'jane-austen-fans',
+        name: 'Jane Austen Fans',
+        description: 'Discussing the works of Jane Austen.',
+        isPublic: true,
+        bookId: 'pride-and-prejudice',
+        memberIds: ['user-1', 'user-3'],
+    }
+];
 
 export default function ClubDetailsPage({ params }: { params: { id: string } }) {
-  const { firestore } = useFirebase();
-
-  const clubRef = useMemoFirebase(
-    () => (firestore ? doc(firestore, "bookClubs", params.id) : null),
-    [firestore, params.id]
-  );
-  const { data: club, isLoading: isClubLoading } = useDoc<Club>(clubRef);
-
-  const bookRef = useMemoFirebase(
-    () => (firestore && club?.bookId ? doc(firestore, "books", club.bookId) : null),
-    [firestore, club?.bookId]
-  );
-  const { data: book, isLoading: isBookLoading } = useDoc<Book>(bookRef);
-
-  const membersCollectionRef = useMemoFirebase(
-    () =>
-      firestore
-        ? collection(firestore, "bookClubs", params.id, "members")
-        : null,
-    [firestore, params.id]
-  );
-  const { data: clubMembers, isLoading: areMembersLoading } =
-    useCollection<User>(membersCollectionRef);
-
-  if (isClubLoading || isBookLoading || areMembersLoading) {
-    return <div>Loading...</div>; // TODO: Add skeleton loader
+  const club = allClubs.find(c => c.id === params.id);
+  
+  if (!club) {
+    return notFound();
   }
 
-  if (!club || !book) {
+  const book = books.find(b => b.id === club.bookId);
+  const clubMembers = users.filter(u => club.memberIds.includes(u.id));
+
+  if (!book) {
     return notFound();
   }
 

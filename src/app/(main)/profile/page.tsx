@@ -1,4 +1,3 @@
-
 'use client';
 import Image from "next/image";
 import {
@@ -9,34 +8,35 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useCollection, useDoc, useFirebase, useUser, useMemoFirebase } from "@/firebase";
-import { collection, doc, query, where } from "firebase/firestore";
+import { useUser } from "@/firebase";
+import { books, users as mockUsers } from "@/lib/data";
 import type { Book, Club } from "@/lib/types";
-import { useMemo }from "react";
+
+const myClubs: (Club & { id: string })[] = [
+    {
+        id: 'dune-disciples',
+        name: 'Dune Disciples',
+        description: 'A club for fans of Frank Herbert\'s masterpiece.',
+        isPublic: true,
+        bookId: 'dune',
+        memberIds: ['user-1', 'user-2', 'user-3'],
+    },
+    {
+        id: 'jane-austen-fans',
+        name: 'Jane Austen Fans',
+        description: 'Discussing the works of Jane Austen.',
+        isPublic: true,
+        bookId: 'pride-and-prejudice',
+        memberIds: ['user-1', 'user-3'],
+    }
+];
+
+const readBooks = books.slice(0, 3);
 
 export default function ProfilePage() {
-  const { firestore } = useFirebase();
   const { user, isUserLoading } = useUser();
 
-  const myClubsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'bookClubs'),
-      where('memberIds', 'array-contains', user.uid)
-    );
-  }, [firestore, user]);
-
-  const { data: myClubs, isLoading: areClubsLoading } = useCollection<Club>(myClubsQuery);
-  
-  // Mock read books for now
-  const readBooksCollectionRef = useMemoFirebase(
-    () => (firestore ? collection(firestore, "books") : null),
-    [firestore]
-  );
-  const { data: readBooks } = useCollection<Book>(readBooksCollectionRef);
-
-
-  if (isUserLoading || areClubsLoading) {
+  if (isUserLoading) {
     return <div>Loading...</div>
   }
   
@@ -45,12 +45,12 @@ export default function ProfilePage() {
       <Card>
         <CardHeader className="items-center text-center">
           <Avatar className="h-24 w-24 mb-4">
-            <AvatarImage src={user?.photoURL || ''} alt={user?.displayName || ''} />
+            <AvatarImage src={user?.photoURL || 'https://picsum.photos/seed/user-1/100/100'} alt={user?.displayName || 'Alex'} />
             <AvatarFallback className="text-3xl">
-              {user?.displayName?.charAt(0)}
+              {user?.displayName?.charAt(0) || 'A'}
             </AvatarFallback>
           </Avatar>
-          <CardTitle className="text-3xl">{user?.displayName}</CardTitle>
+          <CardTitle className="text-3xl">{user?.displayName || 'Alex'}</CardTitle>
           <CardDescription>Member since 2024</CardDescription>
         </CardHeader>
       </Card>
@@ -74,7 +74,7 @@ export default function ProfilePage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {readBooks?.slice(0,3).map((book) => (
+              {readBooks.map((book) => (
                 <div key={book.id}>
                   <p className="font-semibold">{book.title}</p>
                   <p className="text-sm text-muted-foreground">{book.author}</p>
@@ -88,14 +88,8 @@ export default function ProfilePage() {
   );
 }
 
-
 function ClubListItem({ club }: { club: Club }) {
-    const { firestore } = useFirebase();
-    const bookRef = useMemoFirebase(
-      () => (firestore && club.bookId ? doc(firestore, "books", club.bookId) : null),
-      [firestore, club.bookId]
-    );
-    const { data: book } = useDoc<Book>(bookRef);
+    const book = books.find(b => b.id === club.bookId);
 
     return (
         <div className="flex items-center gap-4">

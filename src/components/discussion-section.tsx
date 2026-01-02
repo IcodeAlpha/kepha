@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Book, Chapter, DiscussionPost, User, UserNote } from "@/lib/types";
@@ -8,12 +7,12 @@ import { Textarea } from "./ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Separator } from "./ui/separator";
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { Loader2, Sparkles, Trash2, Volume2, Play, Pause } from "lucide-react";
-import { collection, doc, query, where } from "firebase/firestore";
-import { addDocumentNonBlocking, deleteDocumentNonBlocking, useCollection, useDoc, useFirebase, useUser, useMemoFirebase } from "@/firebase";
+import { useUser } from "@/firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useForm, SubmitHandler } from "react-hook-form";
+import { users as mockUsers } from "@/lib/data";
 
 interface DiscussionSectionProps {
   chapter: Chapter;
@@ -21,9 +20,7 @@ interface DiscussionSectionProps {
 }
 
 function Comment({ post }: { post: DiscussionPost }) {
-    const { firestore } = useFirebase();
-    const userRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', post.userId) : null, [firestore, post.userId]);
-    const { data: user } = useDoc<User>(userRef);
+    const user = mockUsers.find(u => u.id === post.userId);
 
     if (!user) return null;
 
@@ -46,31 +43,15 @@ function Comment({ post }: { post: DiscussionPost }) {
 }
 
 function MyNotesSection({ bookId, chapterId }: { bookId: string; chapterId: string; }) {
-    const { firestore } = useFirebase();
     const { user } = useUser();
     const { register, handleSubmit, reset } = useForm<{ content: string }>();
-
-    const notesQuery = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        return query(
-            collection(firestore, "userNotes"),
-            where("userId", "==", user.uid),
-            where("bookId", "==", bookId),
-            where("chapterId", "==", chapterId)
-        );
-    }, [firestore, user, bookId, chapterId]);
-
-    const { data: notes, isLoading } = useCollection<UserNote>(notesQuery);
-
-    const notesCollectionRef = useMemoFirebase(
-      () => firestore ? collection(firestore, 'userNotes') : null,
-      [firestore]
-    );
-
+    const [notes, setNotes] = useState<UserNote[]>([]);
+    
     const onSubmit: SubmitHandler<{ content: string }> = async (data) => {
-        if (!user || !notesCollectionRef) return;
+        if (!user) return;
         
-        const newNote: Omit<UserNote, 'id'> = {
+        const newNote: UserNote = {
+            id: `note-${Date.now()}`,
             userId: user.uid,
             bookId,
             chapterId,
@@ -78,14 +59,12 @@ function MyNotesSection({ bookId, chapterId }: { bookId: string; chapterId: stri
             createdAt: new Date().toISOString()
         };
 
-        addDocumentNonBlocking(notesCollectionRef, newNote);
+        setNotes(prev => [...prev, newNote]);
         reset();
     };
 
     const handleDeleteNote = (noteId: string) => {
-        if (!firestore) return;
-        const noteRef = doc(firestore, "userNotes", noteId);
-        deleteDocumentNonBlocking(noteRef);
+        setNotes(prev => prev.filter(n => n.id !== noteId));
     }
 
     return (
@@ -97,9 +76,8 @@ function MyNotesSection({ bookId, chapterId }: { bookId: string; chapterId: stri
 
             <Separator />
             
-            {isLoading && <p>Loading notes...</p>}
             <div className="space-y-3">
-                 {notes?.map(note => (
+                 {notes.map(note => (
                     <Card key={note.id} className="bg-secondary/50">
                         <CardContent className="p-4 text-sm flex justify-between items-start">
                            <p>{note.content}</p>
@@ -109,14 +87,13 @@ function MyNotesSection({ bookId, chapterId }: { bookId: string; chapterId: stri
                         </CardContent>
                     </Card>
                 ))}
-                {notes?.length === 0 && <p className="text-xs text-muted-foreground">Your private notes for this chapter will appear here.</p>}
+                {notes.length === 0 && <p className="text-xs text-muted-foreground">Your private notes for this chapter will appear here.</p>}
             </div>
         </div>
     )
 }
 
 export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
-  const { firestore } = useFirebase();
   const [prompts, setPrompts] = useState<string[] | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [isPromptsLoading, setPromptsLoading] = useState(false);
@@ -127,12 +104,7 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = React.useRef<HTMLAudioElement>(null);
 
-
-  const discussionCollectionRef = useMemoFirebase(
-    () => (firestore ? collection(firestore, "books", book.id, "chapters", chapter.id, "discussion") : null),
-    [firestore, book.id, chapter.id]
-  );
-  const { data: discussion, isLoading } = useCollection<DiscussionPost>(discussionCollectionRef);
+  const discussion = chapter.discussion || [];
 
   const handleGeneratePrompts = async () => {
     setPromptsLoading(true);
@@ -278,7 +250,6 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
             </TabsList>
             <TabsContent value="comments" className="pt-4">
                 <div className="space-y-4">
-                {isLoading && <p>Loading comments...</p>}
                 {discussion?.map((post) => (
                     <Comment key={post.id} post={post} />
                 ))}
