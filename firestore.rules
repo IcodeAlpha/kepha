@@ -58,7 +58,7 @@ service cloud.firestore {
       // A user can add themselves as a member (join).
       // A user can remove themselves (leave), or the club owner can remove them.
       match /members/{userId} {
-        allow read: if isSignedIn() && (exists(/databases/$(database)/documents/bookClubs/$(clubId)/members/$(request.auth.uid)) || isOwner(resource.data.ownerId));
+        allow read: if isSignedIn() && (exists(/databases/$(database)/documents/bookClubs/$(clubId)/members/$(request.auth.uid)) || isOwner(get(/databases/$(database)/documents/bookClubs/$(clubId)).data.ownerId));
         allow create: if isOwner(userId) || request.auth == null;
         allow delete: if isOwner(userId) || isOwner(get(/databases/$(database)/documents/bookClubs/$(clubId)).data.ownerId);
       }
@@ -68,7 +68,7 @@ service cloud.firestore {
     // Users can only create, read, update, or delete their own notes.
     match /userNotes/{noteId} {
         allow read, write: if isSignedIn() && request.auth.uid == resource.data.userId;
-        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid) || request.auth == null;
     }
   }
 }
