@@ -1,9 +1,10 @@
+
 'use client';
 import Image from "next/image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, Sparkles } from "lucide-react";
-import { useCollection, useDoc, useFirebase, useUser } from "@/firebase";
+import { useCollection, useDoc, useFirebase, useUser, useMemoFirebase } from "@/firebase";
 import { collection, doc, query, where } from "firebase/firestore";
 import type { Book, Club } from "@/lib/types";
 import React, { useMemo, useState, useEffect } from "react";
@@ -15,6 +16,8 @@ type RecommendedBook = {
     title: string;
     author: string;
     reason: string;
+    coverUrl: string;
+    coverHint: string;
 };
 
 function AIRecommendations() {
@@ -53,7 +56,7 @@ function AIRecommendations() {
                     const enrichedRecommendations = result.recommendations.map(rec => {
                         const bookDetails = allBooks.find(b => b.id === rec.id);
                         return { ...rec, ...bookDetails };
-                    });
+                    }) as RecommendedBook[];
                     setRecommendations(enrichedRecommendations);
                 } catch (error) {
                     console.error("Failed to fetch recommendations:", error);

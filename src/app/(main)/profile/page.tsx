@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useCollection, useDoc, useFirebase, useUser } from "@/firebase";
+import { useCollection, useDoc, useFirebase, useUser, useMemoFirebase } from "@/firebase";
 import { collection, doc, query, where } from "firebase/firestore";
 import type { Book, Club } from "@/lib/types";
 import { useMemo }from "react";

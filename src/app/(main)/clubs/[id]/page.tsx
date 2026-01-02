@@ -21,8 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { DiscussionSection } from "@/components/discussion-section";
-import { useMemo } from "react";
-import { useCollection, useDoc, useFirebase } from "@/firebase";
+import { useCollection, useDoc, useFirebase, useMemoFirebase } from "@/firebase";
 import { doc, collection } from "firebase/firestore";
 import type { Book, Club, User } from "@/lib/types";
 

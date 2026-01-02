@@ -12,7 +12,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { useCollection, useDoc, useFirebase, useUser } from "@/firebase";
+import { useCollection, useDoc, useFirebase, useUser, useMemoFirebase } from "@/firebase";
 import { collection, doc, query, where } from "firebase/firestore";
 import type { Book, Club, User } from "@/lib/types";
 import { useMemo } from "react";

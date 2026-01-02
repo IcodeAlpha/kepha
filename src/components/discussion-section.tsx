@@ -11,7 +11,7 @@ import { Separator } from "./ui/separator";
 import React, { useMemo, useState } from "react";
 import { Loader2, Sparkles, Trash2, Volume2, Play, Pause } from "lucide-react";
 import { collection, doc, query, where } from "firebase/firestore";
-import { addDocumentNonBlocking, deleteDocumentNonBlocking, useCollection, useDoc, useFirebase, useUser } from "@/firebase";
+import { addDocumentNonBlocking, deleteDocumentNonBlocking, useCollection, useDoc, useFirebase, useUser, useMemoFirebase } from "@/firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useForm, SubmitHandler } from "react-hook-form";
 
@@ -21,7 +21,7 @@ interface DiscussionSectionProps {
 }
 
 function Comment({ post }: { post: DiscussionPost }) {
-    const { firestore, useMemoFirebase } = useFirebase();
+    const { firestore } = useFirebase();
     const userRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', post.userId) : null, [firestore, post.userId]);
     const { data: user } = useDoc<User>(userRef);
 
@@ -46,7 +46,7 @@ function Comment({ post }: { post: DiscussionPost }) {
 }
 
 function MyNotesSection({ bookId, chapterId }: { bookId: string; chapterId: string; }) {
-    const { firestore, useMemoFirebase } = useFirebase();
+    const { firestore } = useFirebase();
     const { user } = useUser();
     const { register, handleSubmit, reset } = useForm<{ content: string }>();
 
@@ -116,7 +116,7 @@ function MyNotesSection({ bookId, chapterId }: { bookId: string; chapterId: stri
 }
 
 export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
-  const { firestore, useMemoFirebase } = useFirebase();
+  const { firestore } = useFirebase();
   const [prompts, setPrompts] = useState<string[] | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [isPromptsLoading, setPromptsLoading] = useState(false);
@@ -274,7 +274,7 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
         <Tabs defaultValue="comments" className="w-full">
             <TabsList>
                 <TabsTrigger value="comments">Comments ({discussion?.length || 0})</TabsTrigger>
-                <TabsTrigger value="notes">My Notes</TapsTrigger>
+                <TabsTrigger value="notes">My Notes</TabsTrigger>
             </TabsList>
             <TabsContent value="comments" className="pt-4">
                 <div className="space-y-4">
