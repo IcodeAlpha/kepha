@@ -21,7 +21,7 @@ service cloud.firestore {
       allow read, update, delete: if isOwner(userId);
       // Allow create if the document does not exist yet. This allows the seeder to work
       // while an anonymous user is logged in, without opening up a security hole to overwrite existing users.
-      allow create: if !exists(/databases/$(database)/documents/users/$(userId));
+      allow write: if !exists(/databases/$(database)/documents/users/$(userId));
     }
 
     // BOOKS
