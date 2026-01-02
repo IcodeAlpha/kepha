@@ -13,62 +13,61 @@ service cloud.firestore {
     }
 
     // USERS
-    // Users can only read and write to their own document.
-    // Allow seeding for now.
+    // Allow anyone to create a user document (for seeding)
+    // Signed-in users can read and write to their own document.
     match /users/{userId} {
-      allow read, write: if isSignedIn() || request.auth == null;
+      allow read, write: if isOwner(userId);
+      allow create: if true; // Allows seeding
     }
 
     // BOOKS
-    // Books are publically readable but cannot be written to by clients, except for seeding.
+    // Books and chapters are publicly readable.
+    // Writes are only allowed during seeding (unauthenticated).
     match /books/{bookId} {
       allow get, list: if true;
-      allow write: if request.auth == null; // Allow seeding
+      allow write: if request.auth == null;
 
       // CHAPTERS (subcollection of books)
-      // Chapters are publically readable.
       match /chapters/{chapterId} {
         allow get, list: if true;
-        allow write: if request.auth == null; // Allow seeding
+        allow write: if request.auth == null;
 
         // DISCUSSION (subcollection of chapters)
-        // Any signed-in user can read or create discussion posts.
-        // Only the original author can update or delete their own post.
         match /discussion/{postId} {
-          allow read, create: if isSignedIn();
+          allow read: if isSignedIn();
+          allow create: if isSignedIn();
           allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-          allow write: if request.auth == null; // Allow seeding
+          allow write: if request.auth == null; // For seeding
         }
       }
     }
 
     // BOOK CLUBS
-    // Any signed in user can view club listings.
-    // Club data can be read by any member of that club.
-    // The club owner is the only one who can update or delete the club.
-    // Any signed in user can create a club (and they are automatically the owner).
+    // Allow reading clubs for any signed-in user.
+    // Creation is allowed for signed-in users or during seeding.
+    // Updates/deletes are restricted to the owner.
     match /bookClubs/{clubId} {
       allow list: if isSignedIn();
-      allow get: if isSignedIn() && request.auth.uid in resource.data.memberIds;
-      allow create: if (isSignedIn() && request.resource.data.ownerId == request.auth.uid) || request.auth == null;
+      allow get: if isSignedIn() && (request.auth.uid in resource.data.memberIds || resource.data.ownerId == request.auth.uid);
+      allow create: if isSignedIn() || request.auth == null;
       allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
 
       // MEMBERS (subcollection of bookClubs)
-      // The member list can be read by any club member.
-      // A user can add themselves as a member (join).
-      // A user can remove themselves (leave), or the club owner can remove them.
+      // Members can be read by other members.
+      // Creation/deletion is handled by club joining logic or seeding.
       match /members/{userId} {
-        allow read: if isSignedIn() && (exists(/databases/$(database)/documents/bookClubs/$(clubId)/members/$(request.auth.uid)) || get(/databases/$(database)/documents/bookClubs/$(clubId)).data.ownerId == request.auth.uid);
-        allow create: if isOwner(userId) || request.auth == null;
-        allow delete: if isOwner(userId) || get(/databases/$(database)/documents/bookClubs/$(clubId)).data.ownerId == request.auth.uid;
+        allow read: if isSignedIn() && exists(/databases/$(database)/documents/bookClubs/$(clubId)/members/$(request.auth.uid));
+        allow create, delete: if request.auth == null || isOwner(userId) || get(/databases/$(database)/documents/bookClubs/$(clubId)).data.ownerId == request.auth.uid;
       }
     }
     
     // USER NOTES
-    // Users can only create, read, update, or delete their own notes.
+    // Users can only manage their own notes. Creation allowed for users or seeding.
     match /userNotes/{noteId} {
-        allow read, write: if isSignedIn() && request.auth.uid == resource.data.userId;
-        allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid) || request.auth == null;
+        allow read, update, delete: if isOwner(resource.data.userId);
+        allow create: if isOwner(request.resource.data.userId) || request.auth == null;
     }
   }
 }
+
+    
