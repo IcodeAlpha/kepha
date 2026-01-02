@@ -4,8 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, Sparkles } from "lucide-react";
 import type { Book } from "@/lib/types";
-import React, { useMemo, useState, useEffect } from "react";
-import { getAIRecommendations } from "@/app/actions";
+import React, { useMemo, useState, useEffect, useTransition } from "react";
+import { getAIRecommendations, searchBooks } from "@/app/actions";
 import { Separator } from "@/components/ui/separator";
 import { books as allBooks } from "@/lib/data";
 
@@ -97,15 +97,23 @@ function AIRecommendations() {
 
 export default function DiscoverPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<Book[]>([]);
+  const [isSearching, startSearchTransition] = useTransition();
 
-  const filteredBooks = useMemo(() => {
-    if (!allBooks) return [];
-    return allBooks.filter(book => 
-        book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        book.author.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [allBooks, searchTerm]);
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchTerm(query);
+    startSearchTransition(async () => {
+        if (query.trim().length > 2) {
+            const results = await searchBooks(query);
+            setSearchResults(results);
+        } else {
+            setSearchResults([]);
+        }
+    });
+  }
 
+  const displayedBooks = searchTerm.trim().length > 0 ? searchResults : allBooks;
 
   return (
     <div className="space-y-8">
@@ -114,19 +122,22 @@ export default function DiscoverPage() {
         <Separator />
       
         <div className="space-y-6">
-            <h2 className="text-2xl font-bold">All Books</h2>
+            <div className="flex justify-between items-center">
+                 <h2 className="text-2xl font-bold">{searchTerm.trim().length > 0 ? 'Search Results' : 'All Books'}</h2>
+                {isSearching && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+            </div>
             <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input 
                     placeholder="Search for books or authors..." 
                     className="pl-10 w-full md:w-1/2 lg:w-1/3" 
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={handleSearch}
                 />
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                {filteredBooks?.map((book) => (
+                {displayedBooks?.map((book) => (
                 <Card key={book.id} className="overflow-hidden group transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
                     <CardContent className="p-0">
                     <Image
@@ -145,6 +156,9 @@ export default function DiscoverPage() {
                 </Card>
                 ))}
             </div>
+            {searchTerm.length > 0 && displayedBooks.length === 0 && !isSearching && (
+                <p className="text-muted-foreground">No books found for "{searchTerm}".</p>
+            )}
         </div>
     </div>
   );

@@ -20,6 +20,8 @@ import {
   TextToSpeechInput,
   TextToSpeechOutput,
 } from "@/ai/flows/text-to-speech";
+import type { Book } from "@/lib/types";
+
 
 export async function getAIDiscussionPrompts(
   input: GenerateDiscussionPromptsInput
@@ -75,4 +77,32 @@ export async function getAIRecommendations(
         console.error("Error generating AI recommendations:", error);
         throw new Error("Failed to generate recommendations.");
     }
+}
+
+export async function searchBooks(query: string): Promise<Book[]> {
+  if (!query) {
+    return [];
+  }
+  try {
+    const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=20`);
+    if (!response.ok) {
+      throw new Error(`Google Books API failed with status: ${response.status}`);
+    }
+    const data = await response.json();
+    const items = data.items || [];
+    
+    return items.map((item: any): Book => ({
+      id: item.id,
+      title: item.volumeInfo.title,
+      author: item.volumeInfo.authors ? item.volumeInfo.authors.join(', ') : 'Unknown Author',
+      coverUrl: item.volumeInfo.imageLinks?.thumbnail || 'https://picsum.photos/seed/placeholder/400/600',
+      coverHint: 'book cover',
+      summary: item.volumeInfo.description || 'No summary available.',
+    }));
+  } catch (error) {
+    console.error("Error searching books:", error);
+    // In case of an API error, we can return an empty array
+    // or you could handle it differently in the UI.
+    return [];
+  }
 }
