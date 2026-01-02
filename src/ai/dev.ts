@@ -4,3 +4,4 @@ config();
 import '@/ai/flows/summarize-chapter-discussions.ts';
 import '@/ai/flows/generate-discussion-prompts.ts';
 import '@/ai/flows/text-to-speech.ts';
+import '@/ai/flows/generate-recommendations.ts';

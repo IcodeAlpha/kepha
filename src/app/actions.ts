@@ -6,6 +6,11 @@ import {
   GenerateDiscussionPromptsOutput,
 } from "@/ai/flows/generate-discussion-prompts";
 import {
+    generateRecommendations,
+    GenerateRecommendationsInput,
+    GenerateRecommendationsOutput,
+} from "@/ai/flows/generate-recommendations";
+import {
   summarizeChapterDiscussions,
   SummarizeChapterDiscussionsInput,
   SummarizeChapterDiscussionsOutput,
@@ -56,4 +61,18 @@ export async function getAIAudio(
     console.error("Error generating AI audio:", error);
     throw new Error("Failed to generate audio.");
   }
+}
+
+export async function getAIRecommendations(
+  input: GenerateRecommendationsInput
+): Promise<GenerateRecommendationsOutput> {
+    console.log("Generating AI recommendations with input:", input.readBooks.map(b => b.title));
+    try {
+        const output = await generateRecommendations(input);
+        console.log("AI recommendations generated:", output);
+        return output;
+    } catch (error) {
+        console.error("Error generating AI recommendations:", error);
+        throw new Error("Failed to generate recommendations.");
+    }
 }
