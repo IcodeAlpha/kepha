@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Separator } from "./ui/separator";
 import React, { useState } from "react";
-import { Loader2, Sparkles, Trash2, Volume2, Play, Pause } from "lucide-react";
+import { Loader2, Sparkles, Trash2, Volume2, Play, Pause, MessageSquarePlus } from "lucide-react";
 import { useUser } from "@/firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useForm, SubmitHandler } from "react-hook-form";
@@ -40,6 +40,36 @@ function Comment({ post }: { post: DiscussionPost }) {
             </div>
         </div>
     )
+}
+
+function CommentForm({ onCommentSubmit }: { onCommentSubmit: (content: string) => void }) {
+    const { register, handleSubmit, reset } = useForm<{ content: string }>();
+    const { user } = useUser();
+
+    const onSubmit: SubmitHandler<{ content: string }> = (data) => {
+        onCommentSubmit(data.content);
+        reset();
+    };
+
+    return (
+        <form onSubmit={handleSubmit(onSubmit)} className="flex gap-3 items-start mt-6">
+             <Avatar className="h-8 w-8">
+                <AvatarImage src={user?.photoURL || undefined} alt={user?.displayName || "You"} />
+                <AvatarFallback>{user?.displayName?.charAt(0) || 'U'}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 space-y-2">
+                <Textarea 
+                    placeholder="Share your thoughts on this chapter..." 
+                    {...register("content", { required: true })} 
+                    rows={2}
+                />
+                <Button type="submit">
+                    <MessageSquarePlus className="mr-2"/>
+                    Post Comment
+                </Button>
+            </div>
+        </form>
+    );
 }
 
 function MyNotesSection({ bookId, chapterId }: { bookId: string; chapterId: string; }) {
@@ -94,6 +124,7 @@ function MyNotesSection({ bookId, chapterId }: { bookId: string; chapterId: stri
 }
 
 export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
+  const { user } = useUser();
   const [prompts, setPrompts] = useState<string[] | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [isPromptsLoading, setPromptsLoading] = useState(false);
@@ -104,7 +135,20 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = React.useRef<HTMLAudioElement>(null);
 
-  const discussion = chapter.discussion || [];
+  const [discussion, setDiscussion] = useState<DiscussionPost[]>(chapter.discussion || []);
+
+  const handleCommentSubmit = (content: string) => {
+    if (!user) return;
+    const newPost: DiscussionPost = {
+        id: `post-${Date.now()}`,
+        userId: 'user-1', // Mocking as current user
+        content,
+        timestamp: new Date().toISOString(),
+        replies: []
+    };
+    setDiscussion(prev => [newPost, ...prev]);
+  };
+
 
   const handleGeneratePrompts = async () => {
     setPromptsLoading(true);
@@ -188,7 +232,7 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex flex-wrap gap-2">
         <Button onClick={handleGeneratePrompts} disabled={isPromptsLoading}>
           {isPromptsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
@@ -217,7 +261,7 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
       {prompts && (
         <Card className="bg-primary/10 border-primary/20">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Sparkles className="text-primary"/> AI Discussion Prompts</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base"><Sparkles className="text-primary"/> AI Discussion Prompts</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="space-y-2 list-disc pl-5">
@@ -233,7 +277,7 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
       {summary && (
         <Card>
             <CardHeader>
-                <CardTitle>AI Discussion Summary</CardTitle>
+                <CardTitle className="text-base">AI Discussion Summary</CardTitle>
             </CardHeader>
             <CardContent>
                 <p className="text-sm">{summary}</p>
@@ -241,23 +285,19 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
         </Card>
       )}
 
-      <Separator />
-
-        <Tabs defaultValue="comments" className="w-full">
+      <Tabs defaultValue="discussion" className="w-full">
             <TabsList>
-                <TabsTrigger value="comments">Comments ({discussion?.length || 0})</TabsTrigger>
-                <TabsTrigger value="notes">My Notes</TabsTrigger>
+                <TabsTrigger value="discussion">Discussion ({discussion.length})</TabsTrigger>
+                <TabsTrigger value="notes">My Private Notes</TabsTrigger>
             </TabsList>
-            <TabsContent value="comments" className="pt-4">
-                <div className="space-y-4">
+            <TabsContent value="discussion" className="pt-4">
+                <CommentForm onCommentSubmit={handleCommentSubmit} />
+                <Separator className="my-6" />
+                <div className="space-y-6">
                 {discussion?.map((post) => (
                     <Comment key={post.id} post={post} />
                 ))}
-                {(discussion?.length || 0) === 0 && <p className="text-sm text-muted-foreground">No comments yet. Be the first to start the discussion!</p>}
-                </div>
-                
-                <div className="flex gap-3 items-start mt-6">
-                    {/* Comment form would go here */}
+                {(discussion.length || 0) === 0 && <p className="text-sm text-center text-muted-foreground pt-4">No comments yet. Be the first to start the discussion!</p>}
                 </div>
             </TabsContent>
             <TabsContent value="notes" className="pt-4">

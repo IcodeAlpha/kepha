@@ -99,14 +99,14 @@ export default function ClubDetailsPage() {
         </TabsList>
         <TabsContent value="discussion">
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-0">
               <Accordion type="single" collapsible className="w-full">
-                {book.chapters?.map((chapter) => (
-                  <AccordionItem value={`chapter-${chapter.id}`} key={chapter.id}>
-                    <AccordionTrigger className="text-lg hover:no-underline">
+                {book.chapters?.map((chapter, index) => (
+                  <AccordionItem value={`chapter-${chapter.id}`} key={chapter.id} className={index === book.chapters.length - 1 ? "border-b-0" : ""}>
+                    <AccordionTrigger className="text-lg hover:no-underline px-6 py-4">
                       Chapter {chapter.chapterNumber}: {chapter.title}
                     </AccordionTrigger>
-                    <AccordionContent className="pt-4">
+                    <AccordionContent className="border-t">
                       <DiscussionSection chapter={chapter} book={book} />
                     </AccordionContent>
                   </AccordionItem>
