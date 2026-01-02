@@ -16,10 +16,12 @@ service cloud.firestore {
 
     // USERS
     // - Authenticated users can read/write their own profile.
-    // - Seeding: Allow creation of any user doc if unauthenticated.
+    // - Seeding: Allow creation of any user doc if it doesn't exist yet.
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
-      allow create: if request.auth == null;
+      allow read, update, delete: if isOwner(userId);
+      // Allow create if the document does not exist yet. This allows the seeder to work
+      // while an anonymous user is logged in, without opening up a security hole to overwrite existing users.
+      allow create: if !exists(/databases/$(database)/documents/users/$(userId));
     }
 
     // BOOKS
