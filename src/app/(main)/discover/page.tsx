@@ -97,8 +97,19 @@ function AIRecommendations() {
 
 export default function DiscoverPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<Book[] | null>(null);
+  const [displayedBooks, setDisplayedBooks] = useState<Book[]>([]);
   const [isSearching, startSearchTransition] = useTransition();
+
+  useEffect(() => {
+    // Fetch initial books on mount
+    const fetchInitialBooks = async () => {
+      startSearchTransition(async () => {
+        const results = await searchBooks('classic literature');
+        setDisplayedBooks(results);
+      });
+    };
+    fetchInitialBooks();
+  }, []);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
@@ -106,14 +117,14 @@ export default function DiscoverPage() {
     startSearchTransition(async () => {
         if (query.trim().length > 2) {
             const results = await searchBooks(query);
-            setSearchResults(results);
-        } else {
-            setSearchResults(null);
+            setDisplayedBooks(results);
+        } else if (query.trim().length === 0) {
+            // Optional: revert to initial list when search is cleared
+            const results = await searchBooks('classic literature');
+            setDisplayedBooks(results);
         }
     });
   }
-
-  const displayedBooks = searchResults === null ? allBooks : searchResults;
 
   return (
     <div className="space-y-8">
@@ -123,7 +134,7 @@ export default function DiscoverPage() {
       
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                 <h2 className="text-2xl font-bold">{searchResults === null ? 'Featured Books' : 'Search Results'}</h2>
+                 <h2 className="text-2xl font-bold">{searchTerm.trim() === '' ? 'Featured Books' : 'Search Results'}</h2>
                 {isSearching && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
             </div>
             <div className="relative">
@@ -158,6 +169,11 @@ export default function DiscoverPage() {
             </div>
             {searchTerm.length > 0 && displayedBooks.length === 0 && !isSearching && (
                 <p className="text-muted-foreground">No books found for "{searchTerm}".</p>
+            )}
+             {displayedBooks.length === 0 && isSearching && (
+                 Array.from({ length: 10 }).map((_, i) => (
+                    <div key={i} className="animate-pulse rounded-lg bg-muted h-64"></div>
+                ))
             )}
         </div>
     </div>
