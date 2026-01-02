@@ -57,7 +57,12 @@ const generateDiscussionPromptsFlow = ai.defineFlow(
     outputSchema: GenerateDiscussionPromptsOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return output!;
+    try {
+        const {output} = await prompt(input);
+        return output || { discussionPrompts: [] };
+    } catch (e) {
+        console.error("Error in generateDiscussionPromptsFlow, returning empty prompts.", e);
+        return { discussionPrompts: [] };
+    }
   }
 );
