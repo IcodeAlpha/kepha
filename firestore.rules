@@ -58,9 +58,9 @@ service cloud.firestore {
       // A user can add themselves as a member (join).
       // A user can remove themselves (leave), or the club owner can remove them.
       match /members/{userId} {
-        allow read: if isSignedIn() && (exists(/databases/$(database)/documents/bookClubs/$(clubId)/members/$(request.auth.uid)) || isOwner(get(/databases/$(database)/documents/bookClubs/$(clubId)).data.ownerId));
+        allow read: if isSignedIn() && (exists(/databases/$(database)/documents/bookClubs/$(clubId)/members/$(request.auth.uid)) || get(/databases/$(database)/documents/bookClubs/$(clubId)).data.ownerId == request.auth.uid);
         allow create: if isOwner(userId) || request.auth == null;
-        allow delete: if isOwner(userId) || isOwner(get(/databases/$(database)/documents/bookClubs/$(clubId)).data.ownerId);
+        allow delete: if isOwner(userId) || get(/databases/$(database)/documents/bookClubs/$(clubId)).data.ownerId == request.auth.uid;
       }
     }
     
