@@ -1,7 +1,7 @@
 'use client';
 
 import Image from "next/image";
-import { notFound } from "next/navigation";
+import { useParams, notFound } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -42,8 +42,10 @@ const allClubs: (Club & { id: string })[] = [
     }
 ];
 
-export default function ClubDetailsPage({ params }: { params: { id: string } }) {
-  const club = allClubs.find(c => c.id === params.id);
+export default function ClubDetailsPage() {
+  const params = useParams();
+  const id = params.id as string;
+  const club = allClubs.find(c => c.id === id);
   
   if (!club) {
     return notFound();
