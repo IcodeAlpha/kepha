@@ -24,7 +24,7 @@ import type { Book, Club, User, Chapter } from "@/lib/types";
 import { books, users } from "@/lib/data";
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,7 +55,8 @@ function AddChapterDialog({ onChapterAdded }: { onChapterAdded: (chapter: Chapte
     const [number, setNumber] = useState('');
     const [content, setContent] = useState('');
 
-    const handleSubmit = () => {
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
         if (!title || !number || !content) return;
 
         const newChapter: Chapter = {
@@ -89,47 +90,49 @@ function AddChapterDialog({ onChapterAdded }: { onChapterAdded: (chapter: Chapte
                         Fill in the details for the new chapter. This will be visible to all club members.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="chapter-number" className="text-right">
-                            Number
-                        </Label>
-                        <Input
-                            id="chapter-number"
-                            type="number"
-                            value={number}
-                            onChange={(e) => setNumber(e.target.value)}
-                            className="col-span-3"
-                        />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="chapter-title" className="text-right">
-                            Title
-                        </Label>
-                        <Input
-                            id="chapter-title"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            className="col-span-3"
-                        />
-                    </div>
-                    <div className="grid grid-cols-4 items-start gap-4">
-                        <Label htmlFor="chapter-content" className="text-right mt-2">
-                            Content
-                        </Label>
-                        <Textarea
-                            id="chapter-content"
-                            value={content}
-                            onChange={(e) => setContent(e.target.value)}
-                            className="col-span-3"
-                            rows={10}
-                            placeholder="Paste the chapter text here..."
-                        />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button onClick={handleSubmit}>Add Chapter</Button>
-                </DialogFooter>
+                <form onSubmit={handleSubmit}>
+                  <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="chapter-number" className="text-right">
+                              Number
+                          </Label>
+                          <Input
+                              id="chapter-number"
+                              type="number"
+                              value={number}
+                              onChange={(e) => setNumber(e.target.value)}
+                              className="col-span-3"
+                          />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="chapter-title" className="text-right">
+                              Title
+                          </Label>
+                          <Input
+                              id="chapter-title"
+                              value={title}
+                              onChange={(e) => setTitle(e.target.value)}
+                              className="col-span-3"
+                          />
+                      </div>
+                      <div className="grid grid-cols-4 items-start gap-4">
+                          <Label htmlFor="chapter-content" className="text-right mt-2">
+                              Content
+                          </Label>
+                          <Textarea
+                              id="chapter-content"
+                              value={content}
+                              onChange={(e) => setContent(e.target.value)}
+                              className="col-span-3"
+                              rows={10}
+                              placeholder="Paste the chapter text here..."
+                          />
+                      </div>
+                  </div>
+                  <DialogFooter>
+                      <Button type="submit">Add Chapter</Button>
+                  </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     );
@@ -250,3 +253,5 @@ export default function ClubDetailsPage() {
     </div>
   );
 }
+
+    
