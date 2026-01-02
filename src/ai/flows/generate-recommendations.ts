@@ -87,10 +87,15 @@ const generateRecommendationsFlow = ai.defineFlow(
       return { recommendations: [] };
     }
 
-    const {output} = await prompt({
-      readBooks: input.readBooks,
-      availableBooks: availableForRecommendation,
-    });
-    return output!;
+    try {
+        const {output} = await prompt({
+          readBooks: input.readBooks,
+          availableBooks: availableForRecommendation,
+        });
+        return output || { recommendations: [] };
+    } catch (e) {
+        console.error("Error in generateRecommendationsFlow, returning empty recommendations.", e);
+        return { recommendations: [] };
+    }
   }
 );
