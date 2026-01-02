@@ -20,8 +20,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { DiscussionSection } from "@/components/discussion-section";
-import type { Book, Club, User } from "@/lib/types";
+import type { Book, Club, User, Chapter } from "@/lib/types";
 import { books, users } from "@/lib/data";
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { PlusCircle } from "lucide-react";
 
 const allClubs: (Club & { id: string })[] = [
     {
@@ -42,6 +49,92 @@ const allClubs: (Club & { id: string })[] = [
     }
 ];
 
+function AddChapterDialog({ onChapterAdded }: { onChapterAdded: (chapter: Chapter) => void }) {
+    const [open, setOpen] = useState(false);
+    const [title, setTitle] = useState('');
+    const [number, setNumber] = useState('');
+    const [content, setContent] = useState('');
+
+    const handleSubmit = () => {
+        if (!title || !number || !content) return;
+
+        const newChapter: Chapter = {
+            id: `chapter-${Date.now()}`,
+            title,
+            chapterNumber: parseInt(number, 10),
+            content,
+            discussion: [],
+        };
+        onChapterAdded(newChapter);
+        
+        // Reset form and close dialog
+        setTitle('');
+        setNumber('');
+        setContent('');
+        setOpen(false);
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline">
+                    <PlusCircle className="mr-2" />
+                    Add Chapter
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Add a New Chapter</DialogTitle>
+                    <DialogDescription>
+                        Fill in the details for the new chapter. This will be visible to all club members.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="chapter-number" className="text-right">
+                            Number
+                        </Label>
+                        <Input
+                            id="chapter-number"
+                            type="number"
+                            value={number}
+                            onChange={(e) => setNumber(e.target.value)}
+                            className="col-span-3"
+                        />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="chapter-title" className="text-right">
+                            Title
+                        </Label>
+                        <Input
+                            id="chapter-title"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            className="col-span-3"
+                        />
+                    </div>
+                    <div className="grid grid-cols-4 items-start gap-4">
+                        <Label htmlFor="chapter-content" className="text-right mt-2">
+                            Content
+                        </Label>
+                        <Textarea
+                            id="chapter-content"
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            className="col-span-3"
+                            rows={10}
+                            placeholder="Paste the chapter text here..."
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button onClick={handleSubmit}>Add Chapter</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function ClubDetailsPage() {
   const params = useParams();
   const id = params.id as string;
@@ -51,12 +144,22 @@ export default function ClubDetailsPage() {
     return notFound();
   }
 
-  const book = books.find(b => b.id === club.bookId);
+  const bookTemplate = books.find(b => b.id === club.bookId);
   const clubMembers = users.filter(u => club.memberIds.includes(u.id));
+  
+  // Use state to manage the book, allowing chapters to be added dynamically
+  const [book, setBook] = useState(bookTemplate);
 
   if (!book) {
     return notFound();
   }
+  
+  const handleChapterAdded = (newChapter: Chapter) => {
+    const updatedChapters = [...(book.chapters || []), newChapter];
+    updatedChapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
+    setBook({ ...book, chapters: updatedChapters });
+  };
+
 
   const readingProgress = 33; // Mock progress
 
@@ -99,18 +202,31 @@ export default function ClubDetailsPage() {
         </TabsList>
         <TabsContent value="discussion">
           <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                  <CardTitle>Chapters</CardTitle>
+                  <AddChapterDialog onChapterAdded={handleChapterAdded} />
+              </div>
+            </CardHeader>
             <CardContent className="p-0">
               <Accordion type="single" collapsible className="w-full">
-                {book.chapters?.map((chapter, index) => (
-                  <AccordionItem value={`chapter-${chapter.id}`} key={chapter.id} className={index === book.chapters.length - 1 ? "border-b-0" : ""}>
-                    <AccordionTrigger className="text-lg hover:no-underline px-6 py-4">
-                      Chapter {chapter.chapterNumber}: {chapter.title}
-                    </AccordionTrigger>
-                    <AccordionContent className="border-t">
-                      <DiscussionSection chapter={chapter} book={book} />
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
+                {book.chapters && book.chapters.length > 0 ? (
+                    book.chapters.map((chapter, index) => (
+                    <AccordionItem value={`chapter-${chapter.id}`} key={chapter.id} className={index === book.chapters.length - 1 ? "border-b-0" : ""}>
+                        <AccordionTrigger className="text-lg hover:no-underline px-6 py-4">
+                        Chapter {chapter.chapterNumber}: {chapter.title}
+                        </AccordionTrigger>
+                        <AccordionContent className="border-t">
+                          <DiscussionSection chapter={chapter} book={book} />
+                        </AccordionContent>
+                    </AccordionItem>
+                    ))
+                ) : (
+                    <div className="text-center text-muted-foreground p-8">
+                        <p>No chapters have been added for this book yet.</p>
+                        <p className="text-sm">Be the first to add one!</p>
+                    </div>
+                )}
               </Accordion>
             </CardContent>
           </Card>
