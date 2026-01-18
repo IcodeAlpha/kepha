@@ -36,7 +36,7 @@ export default function LandingPage() {
               Read Together, Grow Together
             </h1>
             <p className="mt-6 max-w-2xl mx-auto text-lg md:text-xl text-foreground/80">
-              Kepha is a social reading platform where people discover books, form clubs, and grow through shared ideas. Turn reading into a shared journey.
+              Sipha is a social reading platform where people discover books, form clubs, and grow through shared ideas. Turn reading into a shared journey.
             </p>
             <div className="mt-10 flex justify-center gap-4">
               <Button size="lg" asChild>
@@ -78,7 +78,7 @@ export default function LandingPage() {
 
       <footer className="bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-foreground/60">
-          <p>&copy; {new Date().getFullYear()} Kepha. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Sipha. All rights reserved.</p>
         </div>
       </footer>
     </div>
