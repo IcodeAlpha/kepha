@@ -56,7 +56,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
        <div className="flex items-center justify-center h-screen">
         <div className="flex items-center gap-2">
           <Book className="h-8 w-8 animate-pulse text-primary" />
-          <span className="text-2xl font-bold">Kepha</span>
+          <span className="text-2xl font-bold">Sipha</span>
         </div>
       </div>
     )
@@ -102,7 +102,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </SidebarTrigger>
           <div className="flex-1">
             <h1 className="text-xl font-semibold">
-              {navItems.find((item) => pathname.startsWith(item.href))?.label || "Kepha"}
+              {navItems.find((item) => pathname.startsWith(item.href))?.label || "Sipha"}
             </h1>
           </div>
           <UserMenu />
