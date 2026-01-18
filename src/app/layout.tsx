@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
-  title: 'Kepha: Shared Reading',
+  title: 'Sipha: Shared Reading',
   description: 'A social reading platform where people discover books, read together, and grow through shared ideas.',
 };
 
