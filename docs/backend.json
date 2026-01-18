@@ -5,7 +5,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "User",
       "type": "object",
-      "description": "Represents a user within the Kepha application.",
+      "description": "Represents a user within the Sipha application.",
       "properties": {
         "id": {
           "type": "string",
@@ -40,7 +40,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "BookClub",
       "type": "object",
-      "description": "Represents a book club within the Kepha application.",
+      "description": "Represents a book club within the Sipha application.",
       "properties": {
         "id": {
           "type": "string",
@@ -87,7 +87,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Book",
       "type": "object",
-      "description": "Represents a book within the Kepha application.",
+      "description": "Represents a book within the Sipha application.",
       "properties": {
         "id": {
           "type": "string",
