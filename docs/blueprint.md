@@ -1,4 +1,4 @@
-# **App Name**: Kepha: Shared Reading
+# **App Name**: Sipha: Shared Reading
 
 ## Core Features:
 
