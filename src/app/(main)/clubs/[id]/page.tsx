@@ -189,7 +189,7 @@ export default function ClubDetailsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            <p className="text-sm font-medium">Shared Reading Timeline</p>
+            <p className="text-sm font-medium">Reading Timeline</p>
             <Progress value={readingProgress} />
             <p className="text-xs text-muted-foreground">
               Chapter {Math.ceil(((book.chapters?.length || 0) * readingProgress) / 100)} of {book.chapters?.length || 0}
