@@ -126,7 +126,7 @@ export default function DashboardPage() {
             </AvatarFallback>
           </Avatar>
           <CardTitle className="text-3xl">Welcome, {user?.displayName || 'Reader'}!</CardTitle>
-          <CardDescription>Member since 2024. Here's what's happening in your book clubs.</CardDescription>
+          <CardDescription>Member since 2024. Here's your book clubs.</CardDescription>
         </CardHeader>
       </Card>
       
@@ -151,7 +151,7 @@ export default function DashboardPage() {
        <div className="grid md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>My Other Clubs</CardTitle>
+            <CardTitle>Other Clubs</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
