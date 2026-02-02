@@ -2,17 +2,6 @@
 
 Sipha is a social reading platform where people discover books, form clubs, and grow through shared ideas. This application is built with Next.js, Firebase, and uses Genkit for its AI-powered features.
 
-## Getting Started
-
-First, run the development server:
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:9002](http://localhost:9002) with your browser to see the result.
-
-You can start by exploring the app, discovering new books, and joining or creating book clubs.
 
 ## Features
 
