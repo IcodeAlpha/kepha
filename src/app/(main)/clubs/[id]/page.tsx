@@ -1,257 +1,336 @@
 'use client';
 
-import Image from "next/image";
 import { useParams, notFound } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import Image from "next/image";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
-import { DiscussionSection } from "@/components/discussion-section";
-import type { Book, Club, User, Chapter } from "@/lib/types";
-import { books, users } from "@/lib/data";
-import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle } from "lucide-react";
-
-const allClubs: (Club & { id: string })[] = [
-    {
-        id: 'dune-disciples',
-        name: 'Dune Disciples',
-        description: 'A club for fans of Frank Herbert\'s masterpiece.',
-        isPublic: true,
-        bookId: 'dune',
-        memberIds: ['user-1', 'user-2', 'user-3'],
-    },
-    {
-        id: 'jane-austen-fans',
-        name: 'Jane Austen Fans',
-        description: 'Discussing the works of Jane Austen.',
-        isPublic: true,
-        bookId: 'pride-and-prejudice',
-        memberIds: ['user-1', 'user-3'],
-    }
-];
-
-function AddChapterDialog({ onChapterAdded }: { onChapterAdded: (chapter: Chapter) => void }) {
-    const [open, setOpen] = useState(false);
-    const [title, setTitle] = useState('');
-    const [number, setNumber] = useState('');
-    const [content, setContent] = useState('');
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!title || !number || !content) return;
-
-        const newChapter: Chapter = {
-            id: `chapter-${Date.now()}`,
-            title,
-            chapterNumber: parseInt(number, 10),
-            content,
-            discussion: [],
-        };
-        onChapterAdded(newChapter);
-        
-        // Reset form and close dialog
-        setTitle('');
-        setNumber('');
-        setContent('');
-        setOpen(false);
-    };
-
-    return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button variant="outline">
-                    <PlusCircle className="mr-2" />
-                    Add Chapter
-                </Button>
-            </DialogTrigger>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Add a New Chapter</DialogTitle>
-                    <DialogDescription>
-                        Fill in the details for the new chapter. This will be visible to all club members.
-                    </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleSubmit}>
-                  <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                          <Label htmlFor="chapter-number" className="text-right">
-                              Number
-                          </Label>
-                          <Input
-                              id="chapter-number"
-                              type="number"
-                              value={number}
-                              onChange={(e) => setNumber(e.target.value)}
-                              className="col-span-3"
-                          />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                          <Label htmlFor="chapter-title" className="text-right">
-                              Title
-                          </Label>
-                          <Input
-                              id="chapter-title"
-                              value={title}
-                              onChange={(e) => setTitle(e.target.value)}
-                              className="col-span-3"
-                          />
-                      </div>
-                      <div className="grid grid-cols-4 items-start gap-4">
-                          <Label htmlFor="chapter-content" className="text-right mt-2">
-                              Content
-                          </Label>
-                          <Textarea
-                              id="chapter-content"
-                              value={content}
-                              onChange={(e) => setContent(e.target.value)}
-                              className="col-span-3"
-                              rows={10}
-                              placeholder="Paste the chapter text here..."
-                          />
-                      </div>
-                  </div>
-                  <DialogFooter>
-                      <Button type="submit">Add Chapter</Button>
-                  </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    );
-}
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { 
+  BookOpen, 
+  Users, 
+  MessageSquare, 
+  Calendar,
+  Settings,
+  UserPlus
+} from "lucide-react";
+import { CurrentlyReading } from "@/components/currently-reading";
+import { ActivityFeed } from "@/components/activity-feed";
+import { 
+  clubs, 
+  users, 
+  books,
+  getCurrentlyReadingInClub,
+  getClubMembers,
+  discussions,
+  readingActivities
+} from "@/lib/data";
+import type { Discussion } from "@/lib/types";
 
 export default function ClubDetailsPage() {
   const params = useParams();
   const id = params.id as string;
-  const club = allClubs.find(c => c.id === id);
+  const club = clubs.find(c => c.id === id);
   
   if (!club) {
     return notFound();
   }
 
-  const bookTemplate = books.find(b => b.id === club.bookId);
-  const clubMembers = users.filter(u => club.memberIds.includes(u.id));
+  const currentlyReading = getCurrentlyReadingInClub(id);
+  const clubMembers = getClubMembers(id);
+  const clubDiscussions = discussions.filter(d => d.clubId === id);
+  const generalDiscussions = clubDiscussions.filter(d => d.type === 'general' || d.type === 'check-in');
+  const bookDiscussions = clubDiscussions.filter(d => d.type === 'book-specific');
+  const thematicDiscussions = clubDiscussions.filter(d => d.type === 'thematic');
   
-  // Use state to manage the book, allowing chapters to be added dynamically
-  const [book, setBook] = useState(bookTemplate);
-
-  if (!book) {
-    return notFound();
-  }
-  
-  const handleChapterAdded = (newChapter: Chapter) => {
-    const updatedChapters = [...(book.chapters || []), newChapter];
-    updatedChapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
-    setBook({ ...book, chapters: updatedChapters });
-  };
-
-
-  const readingProgress = 33; // Mock progress
+  // Get club activities
+  const clubActivities = readingActivities
+    .filter(a => a.clubId === id)
+    .map(a => ({
+      ...a,
+      user: users.find(u => u.id === a.userId)!,
+      book: a.bookId ? books.find(b => b.id === a.bookId) : undefined,
+      club: { id: club.id, name: club.name }
+    }));
 
   return (
     <div className="space-y-6">
+      {/* Club Header */}
       <Card>
-        <CardHeader className="flex flex-col md:flex-row items-start gap-6">
-          <Image
-            src={book.coverUrl}
-            alt={`Cover of ${book.title}`}
-            width={150}
-            height={225}
-            className="rounded-lg shadow-lg"
-            data-ai-hint={book.coverHint}
-          />
-          <div className="flex-1">
-            <p className="text-sm text-primary font-semibold">Currently Reading</p>
-            <CardTitle className="text-4xl mt-1">{book.title}</CardTitle>
-            <CardDescription className="text-lg">by {book.author}</CardDescription>
-            <Separator className="my-4" />
-            <h2 className="text-2xl font-bold">{club.name}</h2>
-            <p className="mt-2 text-muted-foreground">{club.description}</p>
+        <CardHeader>
+          <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <CardTitle className="text-4xl">{club.name}</CardTitle>
+                {club.isPublic && (
+                  <Badge variant="secondary">Public</Badge>
+                )}
+              </div>
+              <CardDescription className="text-lg mb-2">
+                {club.description}
+              </CardDescription>
+              <div className="flex flex-wrap gap-2 mt-3">
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <Users className="h-3 w-3" />
+                  {club.memberIds.length} members
+                </Badge>
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <BookOpen className="h-3 w-3" />
+                  {currentlyReading.length} reading now
+                </Badge>
+                {club.theme && (
+                  <Badge variant="outline">{club.theme}</Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground mt-3 italic">
+                ✨ {club.vibe}
+              </p>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button variant="outline" size="icon">
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Invite Members
+              </Button>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Reading Timeline</p>
-            <Progress value={readingProgress} />
-            <p className="text-xs text-muted-foreground">
-              Chapter {Math.ceil(((book.chapters?.length || 0) * readingProgress) / 100)} of {book.chapters?.length || 0}
-            </p>
-          </div>
-        </CardContent>
       </Card>
 
-      <Tabs defaultValue="discussion">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="discussion">Chapters & Discussion</TabsTrigger>
-          <TabsTrigger value="members">Members ({clubMembers?.length || 0})</TabsTrigger>
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="reading" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="reading">
+            <BookOpen className="h-4 w-4 mr-2" />
+            Reading
+          </TabsTrigger>
+          <TabsTrigger value="discussions">
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Discussions
+          </TabsTrigger>
+          <TabsTrigger value="members">
+            <Users className="h-4 w-4 mr-2" />
+            Members
+          </TabsTrigger>
+          <TabsTrigger value="activity">
+            <Calendar className="h-4 w-4 mr-2" />
+            Activity
+          </TabsTrigger>
         </TabsList>
-        <TabsContent value="discussion">
+
+        {/* Reading Tab */}
+        <TabsContent value="reading" className="space-y-6">
+          <CurrentlyReading members={currentlyReading} />
+          
           <Card>
             <CardHeader>
               <div className="flex justify-between items-center">
-                  <CardTitle>Chapters</CardTitle>
-                  <AddChapterDialog onChapterAdded={handleChapterAdded} />
+                <CardTitle>What are you reading?</CardTitle>
+                <Button>
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Add a Book
+                </Button>
+              </div>
+              <CardDescription>
+                Share what you're reading with the club! Everyone reads their own book at their own pace.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          {/* Book-Specific Discussions */}
+          {bookDiscussions.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Book Discussions</CardTitle>
+                <CardDescription>
+                  Join discussions about books members are reading
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {bookDiscussions.map(disc => {
+                  const book = books.find(b => b.id === disc.bookId);
+                  const creator = users.find(u => u.id === disc.createdBy);
+                  return (
+                    <DiscussionCard 
+                      key={disc.id} 
+                      discussion={disc} 
+                      book={book}
+                      creator={creator}
+                    />
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Discussions Tab */}
+        <TabsContent value="discussions" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>General Chat</CardTitle>
+                <Button>
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  New Discussion
+                </Button>
               </div>
             </CardHeader>
-            <CardContent className="p-0">
-              <Accordion type="single" collapsible className="w-full">
-                {book.chapters && book.chapters.length > 0 ? (
-                    book.chapters.map((chapter, index) => (
-                    <AccordionItem value={`chapter-${chapter.id}`} key={chapter.id} className={index === book.chapters.length - 1 ? "border-b-0" : ""}>
-                        <AccordionTrigger className="text-lg hover:no-underline px-6 py-4">
-                        Chapter {chapter.chapterNumber}: {chapter.title}
-                        </AccordionTrigger>
-                        <AccordionContent className="border-t">
-                          <DiscussionSection chapter={chapter} book={book} />
-                        </AccordionContent>
-                    </AccordionItem>
-                    ))
-                ) : (
-                    <div className="text-center text-muted-foreground p-8">
-                        <p>No chapters have been added for this book yet.</p>
-                        <p className="text-sm">Be the first to add one!</p>
+            <CardContent className="space-y-3">
+              {generalDiscussions.map(disc => {
+                const creator = users.find(u => u.id === disc.createdBy);
+                return (
+                  <DiscussionCard 
+                    key={disc.id} 
+                    discussion={disc}
+                    creator={creator}
+                  />
+                );
+              })}
+            </CardContent>
+          </Card>
+
+          {thematicDiscussions.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Cross-Book Discussions</CardTitle>
+                <CardDescription>
+                  Themes and topics across different books
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {thematicDiscussions.map(disc => {
+                  const creator = users.find(u => u.id === disc.createdBy);
+                  return (
+                    <DiscussionCard 
+                      key={disc.id} 
+                      discussion={disc}
+                      creator={creator}
+                    />
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Members Tab */}
+        <TabsContent value="members" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Club Members ({clubMembers.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              {clubMembers.map((member) => {
+                const memberReading = currentlyReading.find(cr => cr.member.id === member.id);
+                return (
+                  <div key={member.id} className="flex gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={member.avatarUrl} alt={member.name} />
+                      <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold">{member.name}</p>
+                      {member.bio && (
+                        <p className="text-sm text-muted-foreground truncate">{member.bio}</p>
+                      )}
+                      {memberReading ? (
+                        <div className="mt-1">
+                          <p className="text-xs text-muted-foreground">Currently reading:</p>
+                          <p className="text-sm font-medium truncate">{memberReading.book.title}</p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-1">Not reading anything yet</p>
+                      )}
+                      {member.favoriteGenres && (
+                        <div className="flex gap-1 mt-2 flex-wrap">
+                          {member.favoriteGenres.slice(0, 2).map(genre => (
+                            <Badge key={genre} variant="secondary" className="text-xs">
+                              {genre}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                )}
-              </Accordion>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="members">
-          <Card>
-            <CardContent className="p-6 grid gap-4">
-              {clubMembers?.map((member) => (
-                <div key={member.id} className="flex items-center gap-4">
-                  <Avatar>
-                    <AvatarImage src={member.avatarUrl} alt={member.name} />
-                    <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <p className="font-medium">{member.name}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+
+        {/* Activity Tab */}
+        <TabsContent value="activity">
+          <ActivityFeed activities={clubActivities} />
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-    
+function DiscussionCard({ 
+  discussion, 
+  book,
+  creator 
+}: { 
+  discussion: Discussion;
+  book?: typeof books[0];
+  creator?: typeof users[0];
+}) {
+  return (
+    <div className="flex gap-3 p-4 rounded-lg border hover:border-primary/50 transition-colors cursor-pointer">
+      {book && (
+        <Image
+          src={book.coverUrl}
+          alt={book.title}
+          width={48}
+          height={72}
+          className="rounded-md"
+          data-ai-hint={book.coverHint}
+        />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="font-semibold truncate">{discussion.title}</h3>
+          {discussion.isPinned && (
+            <Badge variant="secondary" className="text-xs">Pinned</Badge>
+          )}
+        </div>
+        {discussion.description && (
+          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+            {discussion.description}
+          </p>
+        )}
+        <div className="flex items-center gap-3 mt-2">
+          {creator && (
+            <div className="flex items-center gap-1">
+              <Avatar className="h-4 w-4">
+                <AvatarImage src={creator.avatarUrl} alt={creator.name} />
+                <AvatarFallback className="text-xs">{creator.name.charAt(0)}</AvatarFallback>
+              </Avatar>
+              <span className="text-xs text-muted-foreground">{creator.name}</span>
+            </div>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {new Date(discussion.createdAt).toLocaleDateString()}
+          </span>
+          {discussion.tags && discussion.tags.length > 0 && (
+            <div className="flex gap-1">
+              {discussion.tags.map(tag => (
+                <Badge key={tag} variant="outline" className="text-xs">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <MessageSquare className="h-4 w-4 text-muted-foreground" />
+    </div>
+  );
+}
