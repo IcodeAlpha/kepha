@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Logo } from "@/components/logo";
 import { books } from "@/lib/data";
 import { ArrowRight } from "lucide-react";
+import QuoteCarousel from "@/components/QuoteCarousel";
 
 export default function LandingPage() {
   const featuredBooks = books.slice(0, 4);
@@ -14,12 +15,6 @@ export default function LandingPage() {
       <header className="container mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         <Logo />
         <nav className="hidden md:flex items-center space-x-6">
-          <Button variant="ghost" asChild>
-            <Link href="/discover">Discover</Link>
-          </Button>
-          <Button variant="ghost" asChild>
-            <Link href="/clubs">Clubs</Link>
-          </Button>
           <Button asChild>
             <Link href="/dashboard">Enter App</Link>
           </Button>
@@ -38,16 +33,7 @@ export default function LandingPage() {
             <p className="mt-6 max-w-2xl mx-auto text-lg md:text-xl text-foreground/80">
               Sipha is a social reading platform where people discover books, form clubs, and grow through shared ideas. Turn reading into a shared journey.
             </p>
-            <div className="mt-10 flex justify-center gap-4">
-              <Button size="lg" asChild>
-                <Link href="/clubs">
-                  Join a Club <ArrowRight className="ml-2" />
-                </Link>
-              </Button>
-              <Button size="lg" variant="secondary" asChild>
-                <Link href="/discover">Discover Books</Link>
-              </Button>
-            </div>
+            <QuoteCarousel />
           </div>
         </section>
 
