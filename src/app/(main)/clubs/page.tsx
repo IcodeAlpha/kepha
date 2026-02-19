@@ -1,35 +1,48 @@
 'use client';
 
 import Link from "next/link";
-import Image from "next/image";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Plus, Users, BookOpen } from "lucide-react";
-import { clubs, getCurrentlyReadingInClub, getClubMembers } from "@/lib/data";
+import { collection, query, where, doc } from 'firebase/firestore';
+import { arrayUnion, serverTimestamp } from 'firebase/firestore';
+import {
+  useFirestore,
+  useUser,
+  useCollection,
+  useMemoFirebase,
+  updateDocumentNonBlocking,
+  addDocumentNonBlocking,
+  setDocumentNonBlocking,
+} from '@/firebase';
 
-// Current user ID (mocked)
-const currentUserId = 'user-1';
+function ClubCard({
+  club,
+  isMember,
+  onJoin,
+}: {
+  club: any;
+  isMember: boolean;
+  onJoin: (clubId: string) => void;
+}) {
+  const firestore = useFirestore();
 
-function ClubCard({ club, isMember }: { club: typeof clubs[0]; isMember: boolean }) {
-  const currentlyReading = getCurrentlyReadingInClub(club.id);
-  const members = getClubMembers(club.id);
-  
-  // Get unique books being read
-  const uniqueBooks = currentlyReading
-    .filter((cr, index, self) => 
-      index === self.findIndex(t => t.book.id === cr.book.id)
-    )
-    .slice(0, 6);
+  const membersRef = useMemoFirebase(
+    () => collection(firestore, 'clubs', club.id, 'members'),
+    [firestore, club.id]
+  );
+  const { data: membersRaw } = useCollection(membersRef);
+  const members: any[] = membersRaw ?? [];
 
   return (
     <Card className="flex flex-col hover:shadow-lg transition-shadow">
@@ -39,74 +52,28 @@ function ClubCard({ club, isMember }: { club: typeof clubs[0]; isMember: boolean
             <CardTitle className="text-xl">{club.name}</CardTitle>
             <CardDescription className="mt-1">{club.description}</CardDescription>
           </div>
-          {club.isPublic && (
-            <Badge variant="secondary">Public</Badge>
-          )}
+          {club.isPublic && <Badge variant="secondary">Public</Badge>}
         </div>
         <div className="flex gap-2 mt-3">
           <Badge variant="outline" className="flex items-center gap-1">
             <Users className="h-3 w-3" />
-            {club.memberIds.length}
-          </Badge>
-          <Badge variant="outline" className="flex items-center gap-1">
-            <BookOpen className="h-3 w-3" />
-            {currentlyReading.length} reading
+            {club.memberIds?.length ?? 0}
           </Badge>
         </div>
         {club.theme && (
-          <p className="text-sm text-muted-foreground mt-2">
-            📚 {club.theme}
-          </p>
+          <p className="text-sm text-muted-foreground mt-2">📚 {club.theme}</p>
         )}
       </CardHeader>
 
       <CardContent className="flex-grow">
-        {/* Show grid of books being read */}
-        {uniqueBooks.length > 0 ? (
-          <div>
-            <p className="text-sm font-medium mb-3">Currently Reading:</p>
-            <div className="grid grid-cols-3 gap-2">
-              {uniqueBooks.map(({ book }) => (
-                <div key={book.id} className="relative group">
-                  <Image
-                    src={book.coverUrl}
-                    alt={book.title}
-                    width={100}
-                    height={150}
-                    className="rounded-md shadow-sm w-full h-auto object-cover"
-                    data-ai-hint={book.coverHint}
-                  />
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-md flex items-center justify-center p-2">
-                    <p className="text-white text-xs text-center font-medium line-clamp-2">
-                      {book.title}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {currentlyReading.length > uniqueBooks.length && (
-              <p className="text-xs text-muted-foreground mt-2 text-center">
-                +{currentlyReading.length - uniqueBooks.length} more
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-muted-foreground">
-            <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No one reading yet</p>
-          </div>
-        )}
-
         <Separator className="my-4" />
-
-        {/* Member avatars */}
         <div>
           <p className="text-sm font-medium mb-2">Members:</p>
           <div className="flex items-center -space-x-2">
             {members.slice(0, 5).map((member) => (
-              <Avatar key={member.id} className="border-2 border-card">
-                <AvatarImage src={member.avatarUrl} alt={member.name} />
-                <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
+              <Avatar key={member.userId} className="border-2 border-card">
+                <AvatarImage src={member.avatarUrl} alt={member.userId} />
+                <AvatarFallback>{member.userId?.charAt(0)}</AvatarFallback>
               </Avatar>
             ))}
             {members.length > 5 && (
@@ -119,15 +86,15 @@ function ClubCard({ club, isMember }: { club: typeof clubs[0]; isMember: boolean
       </CardContent>
 
       <CardFooter className="flex justify-between items-center">
-        <p className="text-sm text-muted-foreground italic">
-          {club.vibe}
-        </p>
+        <p className="text-sm text-muted-foreground italic">{club.vibe}</p>
         {isMember ? (
           <Button asChild>
             <Link href={`/clubs/${club.id}`}>View Club</Link>
           </Button>
         ) : (
-          <Button variant="secondary">Join Club</Button>
+          <Button variant="secondary" onClick={() => onJoin(club.id)}>
+            Join Club
+          </Button>
         )}
       </CardFooter>
     </Card>
@@ -135,8 +102,60 @@ function ClubCard({ club, isMember }: { club: typeof clubs[0]; isMember: boolean
 }
 
 export default function ClubsPage() {
-  const myClubs = clubs.filter(club => club.memberIds.includes(currentUserId));
-  const publicClubs = clubs.filter(club => !club.memberIds.includes(currentUserId) && club.isPublic);
+  const { user } = useUser();
+  const firestore = useFirestore();
+
+  // ── My clubs ──────────────────────────────────────────────────────────────
+  const myClubsQuery = useMemoFirebase(() => {
+    if (!user) return null;
+    return query(
+      collection(firestore, 'clubs'),
+      where('memberIds', 'array-contains', user.uid)
+    );
+  }, [firestore, user?.uid]);
+  const { data: myClubsRaw } = useCollection(myClubsQuery);
+  const myClubs: any[] = myClubsRaw ?? [];
+
+  // ── All public clubs ──────────────────────────────────────────────────────
+  const publicClubsQuery = useMemoFirebase(() => {
+    return query(
+      collection(firestore, 'clubs'),
+      where('isPublic', '==', true)
+    );
+  }, [firestore]);
+  const { data: allPublicClubsRaw } = useCollection(publicClubsQuery);
+  const allPublicClubs: any[] = allPublicClubsRaw ?? [];
+
+  // Clubs the user hasn't joined yet
+  const myClubIds = new Set(myClubs.map((c) => c.id));
+  const publicClubs = allPublicClubs.filter((c) => !myClubIds.has(c.id));
+
+  // ── Join club ─────────────────────────────────────────────────────────────
+  const handleJoinClub = (clubId: string) => {
+    if (!user) return;
+
+    updateDocumentNonBlocking(doc(firestore, 'clubs', clubId), {
+      memberIds: arrayUnion(user.uid),
+    });
+
+    setDocumentNonBlocking(
+      doc(firestore, 'clubs', clubId, 'members', user.uid),
+      {
+        userId: user.uid,
+        role: 'member',
+        isOnline: false,
+        joinedAt: serverTimestamp(),
+      },
+      { merge: false }
+    );
+
+    addDocumentNonBlocking(collection(firestore, 'readingActivities'), {
+      userId: user.uid,
+      clubId,
+      type: 'joined-club',
+      timestamp: serverTimestamp(),
+    });
+  };
 
   return (
     <div className="space-y-8">
@@ -152,22 +171,21 @@ export default function ClubsPage() {
           Create a Club
         </Button>
       </div>
-      
+
+      {/* My Clubs */}
       <section className="space-y-4">
         <h2 className="text-2xl font-bold">My Clubs</h2>
         {myClubs.length > 0 ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {myClubs.map((club) => (
-              <ClubCard key={club.id} club={club} isMember={true} />
+              <ClubCard key={club.id} club={club} isMember={true} onJoin={handleJoinClub} />
             ))}
           </div>
         ) : (
           <Card>
             <CardContent className="text-center py-12">
               <Users className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-              <p className="text-muted-foreground mb-4">
-                You haven't joined any clubs yet.
-              </p>
+              <p className="text-muted-foreground mb-4">You haven't joined any clubs yet.</p>
               <p className="text-sm text-muted-foreground mb-4">
                 Join a club to share your reading journey with others!
               </p>
@@ -181,6 +199,7 @@ export default function ClubsPage() {
 
       <Separator />
 
+      {/* Explore Public Clubs */}
       <section className="space-y-4" id="explore">
         <div>
           <h2 className="text-2xl font-bold">Explore Public Clubs</h2>
@@ -191,15 +210,14 @@ export default function ClubsPage() {
         {publicClubs.length > 0 ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {publicClubs.map((club) => (
-              <ClubCard key={club.id} club={club} isMember={false} />
+              <ClubCard key={club.id} club={club} isMember={false} onJoin={handleJoinClub} />
             ))}
           </div>
         ) : (
           <Card>
             <CardContent className="text-center py-12">
-              <p className="text-muted-foreground">
-                No public clubs available right now.
-              </p>
+              <BookOpen className="h-12 w-12 mx-auto text-muted-foreground mb-3 opacity-50" />
+              <p className="text-muted-foreground">No public clubs available right now.</p>
             </CardContent>
           </Card>
         )}
