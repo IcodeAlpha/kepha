@@ -2,33 +2,95 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useState } from "react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+  Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { ActivityFeedCompact } from "@/components/activity-feed";
-import { BookOpen, Users, TrendingUp, Calendar } from "lucide-react";
-import { collection, query, where, orderBy, limit } from 'firebase/firestore';
-import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
+import { BookOpen, Users, TrendingUp, Calendar, LogOut, Plus } from "lucide-react";
+import { collection, query, where, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import {
+  useFirestore, useUser, useCollection, useMemoFirebase, addDocumentNonBlocking,
+} from '@/firebase';
+import { getAuth, signOut } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
+
+// ── Add Book Dialog ────────────────────────────────────────────────────────────
+function AddBookDialog({ onAdd }: { onAdd: (bookId: string, title: string, author: string, format: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [author, setAuthor] = useState('');
+  const [format, setFormat] = useState('physical');
+
+  const handleSubmit = () => {
+    if (!title.trim()) return;
+    const bookId = title.toLowerCase().replace(/\s+/g, '-');
+    onAdd(bookId, title, author, format);
+    setOpen(false);
+    setTitle(''); setAuthor(''); setFormat('physical');
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Plus className="h-4 w-4 mr-2" />Add Book
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add a Book</DialogTitle>
+          <DialogDescription>What are you reading right now?</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div className="space-y-2">
+            <Label>Book Title</Label>
+            <Input placeholder="e.g. Dune" value={title} onChange={e => setTitle(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Author</Label>
+            <Input placeholder="e.g. Frank Herbert" value={author} onChange={e => setAuthor(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Format</Label>
+            <Select value={format} onValueChange={setFormat}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="physical">Physical</SelectItem>
+                <SelectItem value="ebook">E-Book</SelectItem>
+                <SelectItem value="audiobook">Audiobook</SelectItem>
+                <SelectItem value="in-app">In-App</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button className="w-full" onClick={handleSubmit}>Start Reading</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
+  const router = useRouter();
 
-  // ── My clubs ─────────────────────────────────────────────────────────────
+  // ── My clubs ──────────────────────────────────────────────────────────────
   const myClubsQuery = useMemoFirebase(() => {
     if (!user) return null;
-    return query(
-      collection(firestore, 'clubs'),
-      where('memberIds', 'array-contains', user.uid)
-    );
+    return query(collection(firestore, 'clubs'), where('memberIds', 'array-contains', user.uid));
   }, [firestore, user?.uid]);
   const { data: myClubsRaw, isLoading: clubsLoading } = useCollection(myClubsQuery);
   const myClubs: any[] = myClubsRaw ?? [];
@@ -36,11 +98,7 @@ export default function DashboardPage() {
   // ── Currently reading ─────────────────────────────────────────────────────
   const readingQuery = useMemoFirebase(() => {
     if (!user) return null;
-    return query(
-      collection(firestore, 'userBooks'),
-      where('userId', '==', user.uid),
-      where('status', '==', 'reading')
-    );
+    return query(collection(firestore, 'userBooks'), where('userId', '==', user.uid), where('status', '==', 'reading'));
   }, [firestore, user?.uid]);
   const { data: currentlyReadingRaw } = useCollection(readingQuery);
   const currentlyReading: any[] = currentlyReadingRaw ?? [];
@@ -48,16 +106,12 @@ export default function DashboardPage() {
   // ── Finished books ────────────────────────────────────────────────────────
   const finishedQuery = useMemoFirebase(() => {
     if (!user) return null;
-    return query(
-      collection(firestore, 'userBooks'),
-      where('userId', '==', user.uid),
-      where('status', '==', 'finished')
-    );
+    return query(collection(firestore, 'userBooks'), where('userId', '==', user.uid), where('status', '==', 'finished'));
   }, [firestore, user?.uid]);
   const { data: finishedBooksRaw } = useCollection(finishedQuery);
   const finishedBooks: any[] = finishedBooksRaw ?? [];
 
-  // ── Activity feed — wait for clubs to finish loading ──────────────────────
+  // ── Activity feed ─────────────────────────────────────────────────────────
   const clubIds = myClubs.map((c) => c.id).slice(0, 10);
   const activityQuery = useMemoFirebase(() => {
     if (clubsLoading || clubIds.length === 0) return null;
@@ -74,17 +128,33 @@ export default function DashboardPage() {
   // ── User profile ──────────────────────────────────────────────────────────
   const userProfileQuery = useMemoFirebase(() => {
     if (!user) return null;
-    return query(
-      collection(firestore, 'users'),
-      where('uid', '==', user.uid),
-      limit(1)
-    );
+    return query(collection(firestore, 'users'), where('uid', '==', user.uid), limit(1));
   }, [firestore, user?.uid]);
   const { data: userProfileDocsRaw } = useCollection(userProfileQuery);
-  const userProfileDocs: any[] = userProfileDocsRaw ?? [];
-  const userProfile = userProfileDocs[0];
+  const userProfile = (userProfileDocsRaw ?? [])[0] as any;
 
-  // ── Block render until auth resolves ─────────────────────────────────────
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handleSignOut = async () => {
+    await signOut(getAuth());
+    router.push('/login');
+  };
+
+  const handleAddBook = (bookId: string, title: string, author: string, format: string) => {
+    if (!user) return;
+    addDocumentNonBlocking(collection(firestore, 'userBooks'), {
+      userId: user.uid,
+      bookId,
+      title,
+      author,
+      format,
+      status: 'reading',
+      progressPercent: 0,
+      startedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  };
+
   if (isUserLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -108,13 +178,9 @@ export default function DashboardPage() {
         <CardHeader className="items-center text-center">
           <Avatar className="h-24 w-24 mb-4">
             <AvatarImage src={avatarUrl ?? undefined} alt={displayName} />
-            <AvatarFallback className="text-3xl">
-              {displayName.charAt(0)}
-            </AvatarFallback>
+            <AvatarFallback className="text-3xl">{displayName.charAt(0)}</AvatarFallback>
           </Avatar>
-          <CardTitle className="text-3xl">
-            Welcome back, {displayName}! 📚
-          </CardTitle>
+          <CardTitle className="text-3xl">Welcome back, {displayName}! 📚</CardTitle>
           <CardDescription className="max-w-md">{bio}</CardDescription>
           {favoriteGenres.length > 0 && (
             <div className="flex gap-2 mt-3 flex-wrap justify-center">
@@ -123,10 +189,24 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
+          {/* Profile actions */}
+          <div className="flex gap-2 mt-4">
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/profile">Edit Profile</Link>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSignOut}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <LogOut className="h-4 w-4 mr-2" />Sign Out
+            </Button>
+          </div>
         </CardHeader>
       </Card>
 
-      {/* Stats Overview */}
+      {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -135,12 +215,9 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{currentlyReading.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {currentlyReading.length === 1 ? 'book' : 'books'} in progress
-            </p>
+            <p className="text-xs text-muted-foreground">{currentlyReading.length === 1 ? 'book' : 'books'} in progress</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Books Finished</CardTitle>
@@ -151,7 +228,6 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">My Clubs</CardTitle>
@@ -162,7 +238,6 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground">Reading communities</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Reading Streak</CardTitle>
@@ -181,10 +256,7 @@ export default function DashboardPage() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>My Current Books</CardTitle>
-              <Button variant="outline" size="sm">
-                <BookOpen className="h-4 w-4 mr-2" />
-                Add Book
-              </Button>
+              <AddBookDialog onAdd={handleAddBook} />
             </div>
           </CardHeader>
           <CardContent>
@@ -195,8 +267,7 @@ export default function DashboardPage() {
                     <Image
                       src={ub.coverUrl || `https://picsum.photos/seed/${ub.bookId}/60/90`}
                       alt={ub.title || ub.bookId}
-                      width={60}
-                      height={90}
+                      width={60} height={90}
                       className="rounded-md shadow-sm"
                     />
                     <div className="flex-1 min-w-0">
@@ -207,9 +278,7 @@ export default function DashboardPage() {
                         <div className="flex justify-between text-xs">
                           <span className="text-muted-foreground">{ub.progressPercent ?? 0}%</span>
                           {ub.currentPage && ub.pageCount && (
-                            <span className="text-muted-foreground">
-                              pg {ub.currentPage} / {ub.pageCount}
-                            </span>
+                            <span className="text-muted-foreground">pg {ub.currentPage} / {ub.pageCount}</span>
                           )}
                         </div>
                         <Progress value={ub.progressPercent ?? 0} className="h-1.5" />
@@ -222,7 +291,7 @@ export default function DashboardPage() {
               <div className="text-center py-8 text-muted-foreground">
                 <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-50" />
                 <p className="mb-3">You're not reading anything yet!</p>
-                <Button variant="outline" size="sm">Start Reading</Button>
+                <AddBookDialog onAdd={handleAddBook} />
               </div>
             )}
           </CardContent>
@@ -238,9 +307,7 @@ export default function DashboardPage() {
             {activities.length > 0 ? (
               <ActivityFeedCompact activities={activities as any} />
             ) : (
-              <p className="text-center text-muted-foreground py-8">
-                No recent activity
-              </p>
+              <p className="text-center text-muted-foreground py-8">No recent activity</p>
             )}
           </CardContent>
         </Card>
@@ -263,12 +330,8 @@ export default function DashboardPage() {
                 <Link key={club.id} href={`/clubs/${club.id}`} className="group">
                   <Card className="hover:shadow-md transition-shadow">
                     <CardHeader>
-                      <CardTitle className="text-lg group-hover:text-primary transition-colors">
-                        {club.name}
-                      </CardTitle>
-                      <CardDescription className="line-clamp-2">
-                        {club.description}
-                      </CardDescription>
+                      <CardTitle className="text-lg group-hover:text-primary transition-colors">{club.name}</CardTitle>
+                      <CardDescription className="line-clamp-2">{club.description}</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -283,12 +346,8 @@ export default function DashboardPage() {
           ) : (
             <div className="text-center py-8">
               <Users className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-              <p className="text-muted-foreground mb-3">
-                You haven't joined any clubs yet.
-              </p>
-              <Button asChild>
-                <Link href="/clubs">Explore Clubs</Link>
-              </Button>
+              <p className="text-muted-foreground mb-3">You haven't joined any clubs yet.</p>
+              <Button asChild><Link href="/clubs">Explore Clubs</Link></Button>
             </div>
           )}
         </CardContent>
@@ -296,9 +355,7 @@ export default function DashboardPage() {
 
       {/* Reading History */}
       <Card>
-        <CardHeader>
-          <CardTitle>Recently Finished</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle>Recently Finished</CardTitle></CardHeader>
         <CardContent>
           {finishedBooks.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -308,8 +365,7 @@ export default function DashboardPage() {
                     <Image
                       src={ub.coverUrl || `https://picsum.photos/seed/${ub.bookId}/150/225`}
                       alt={ub.title || ub.bookId}
-                      width={150}
-                      height={225}
+                      width={150} height={225}
                       className="w-full h-auto object-cover transition-transform group-hover:scale-105"
                     />
                   </div>
@@ -325,9 +381,7 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <p className="text-center text-muted-foreground py-4">
-              No finished books yet. Keep reading!
-            </p>
+            <p className="text-center text-muted-foreground py-4">No finished books yet. Keep reading!</p>
           )}
         </CardContent>
       </Card>

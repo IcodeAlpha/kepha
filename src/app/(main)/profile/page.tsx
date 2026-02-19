@@ -2,42 +2,110 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+  Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { collection, query, where, doc } from 'firebase/firestore';
-import { useFirestore, useUser, useDoc, useCollection, useMemoFirebase } from '@/firebase';
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Pencil } from "lucide-react";
+import { collection, query, where, doc, serverTimestamp } from 'firebase/firestore';
+import {
+  useFirestore, useUser, useDoc, useCollection, useMemoFirebase, updateDocumentNonBlocking,
+} from '@/firebase';
+
+// ── Edit Profile Dialog ───────────────────────────────────────────────────────
+function EditProfileDialog({
+  profile,
+  onSave,
+}: {
+  profile: any;
+  onSave: (data: { name: string; bio: string; favoriteGenres: string[]; readingStyle: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(profile?.name || '');
+  const [bio, setBio] = useState(profile?.bio || '');
+  const [genresInput, setGenresInput] = useState((profile?.favoriteGenres ?? []).join(', '));
+  const [readingStyle, setReadingStyle] = useState(profile?.readingStyle || '');
+
+  const handleSave = () => {
+    const favoriteGenres = genresInput
+      .split(',')
+      .map((g: string) => g.trim())
+      .filter(Boolean);
+    onSave({ name, bio, favoriteGenres, readingStyle });
+    setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Pencil className="h-4 w-4 mr-2" />Edit Profile
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Profile</DialogTitle>
+          <DialogDescription>Update your reading profile.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div className="space-y-2">
+            <Label>Display Name</Label>
+            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" />
+          </div>
+          <div className="space-y-2">
+            <Label>Bio</Label>
+            <Textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Tell us about yourself..." rows={3} />
+          </div>
+          <div className="space-y-2">
+            <Label>Favorite Genres</Label>
+            <Input
+              value={genresInput}
+              onChange={e => setGenresInput(e.target.value)}
+              placeholder="e.g. Fantasy, Sci-Fi, Romance"
+            />
+            <p className="text-xs text-muted-foreground">Separate genres with commas</p>
+          </div>
+          <div className="space-y-2">
+            <Label>Reading Style</Label>
+            <Input value={readingStyle} onChange={e => setReadingStyle(e.target.value)} placeholder="e.g. Night owl reader" />
+          </div>
+          <Button className="w-full" onClick={handleSave}>Save Changes</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function ProfilePage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
 
-  // ── Firestore user profile ──────────────────────────────────────────────
+  // ── Firestore user profile ────────────────────────────────────────────────
   const userDocRef = useMemoFirebase(
     () => (user ? doc(firestore, 'users', user.uid) : null),
     [firestore, user?.uid]
   );
-  const { data: userProfile } = useDoc(userDocRef);
-  const profile = userProfile as any;
+  const { data: userProfileRaw } = useDoc(userDocRef);
+  const userProfile = userProfileRaw as any;
 
-  // ── My clubs ────────────────────────────────────────────────────────────
+  // ── My clubs ──────────────────────────────────────────────────────────────
   const myClubsQuery = useMemoFirebase(() => {
     if (!user) return null;
-    return query(
-      collection(firestore, 'clubs'),
-      where('memberIds', 'array-contains', user.uid)
-    );
+    return query(collection(firestore, 'clubs'), where('memberIds', 'array-contains', user.uid));
   }, [firestore, user?.uid]);
-  const { data: myClubs = [] } = useCollection(myClubsQuery);
+  const { data: myClubsRaw } = useCollection(myClubsQuery);
+  const myClubs: any[] = myClubsRaw ?? [];
 
-  // ── Reading history (finished books) ────────────────────────────────────
+  // ── Reading history ───────────────────────────────────────────────────────
   const readingHistoryQuery = useMemoFirebase(() => {
     if (!user) return null;
     return query(
@@ -46,9 +114,21 @@ export default function ProfilePage() {
       where('status', '==', 'finished')
     );
   }, [firestore, user?.uid]);
-  const { data: readingHistory = [] } = useCollection(readingHistoryQuery);
+  const { data: readingHistoryRaw } = useCollection(readingHistoryQuery);
+  const readingHistory: any[] = readingHistoryRaw ?? [];
 
-  if (isUserLoading) {
+  // ── Save profile ──────────────────────────────────────────────────────────
+  const handleSaveProfile = (data: {
+    name: string; bio: string; favoriteGenres: string[]; readingStyle: string
+  }) => {
+    if (!user) return;
+    updateDocumentNonBlocking(doc(firestore, 'users', user.uid), {
+      ...data,
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  if (isUserLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -59,11 +139,14 @@ export default function ProfilePage() {
     );
   }
 
-  const displayName = user?.displayName || profile?.name || 'Reader';
-  const avatarUrl = user?.photoURL || profile?.avatarUrl;
-  const bio = profile?.bio;
-  const favoriteGenres: string[] = profile?.favoriteGenres || [];
-  const readingStyle: string | undefined = profile?.readingStyle;
+  const displayName = userProfile?.name || user.displayName || 'Reader';
+  const avatarUrl = user.photoURL || userProfile?.avatarUrl;
+  const bio = userProfile?.bio;
+  const favoriteGenres: string[] = userProfile?.favoriteGenres ?? [];
+  const readingStyle: string | undefined = userProfile?.readingStyle;
+  const memberSince = userProfile?.createdAt?.toDate
+    ? new Date(userProfile.createdAt.toDate()).getFullYear()
+    : new Date().getFullYear();
 
   return (
     <div className="space-y-6">
@@ -71,17 +154,12 @@ export default function ProfilePage() {
       <Card>
         <CardHeader className="items-center text-center">
           <Avatar className="h-24 w-24 mb-4">
-            <AvatarImage src={avatarUrl} alt={displayName} />
-            <AvatarFallback className="text-3xl">
-              {displayName.charAt(0)}
-            </AvatarFallback>
+            <AvatarImage src={avatarUrl ?? undefined} alt={displayName} />
+            <AvatarFallback className="text-3xl">{displayName.charAt(0)}</AvatarFallback>
           </Avatar>
           <CardTitle className="text-3xl">{displayName}</CardTitle>
           {bio && <CardDescription className="max-w-md">{bio}</CardDescription>}
-          <CardDescription>Member since {profile?.createdAt?.toDate
-            ? new Date(profile.createdAt.toDate()).getFullYear()
-            : new Date().getFullYear()}
-          </CardDescription>
+          <CardDescription>Member since {memberSince}</CardDescription>
           {favoriteGenres.length > 0 && (
             <div className="flex gap-2 mt-3 flex-wrap justify-center">
               {favoriteGenres.map((genre) => (
@@ -90,10 +168,11 @@ export default function ProfilePage() {
             </div>
           )}
           {readingStyle && (
-            <p className="text-sm text-muted-foreground mt-2 italic">
-              Reading style: {readingStyle}
-            </p>
+            <p className="text-sm text-muted-foreground mt-2 italic">Reading style: {readingStyle}</p>
           )}
+          <div className="mt-4">
+            <EditProfileDialog profile={userProfile} onSave={handleSaveProfile} />
+          </div>
         </CardHeader>
       </Card>
 
@@ -111,7 +190,7 @@ export default function ProfilePage() {
           <CardContent>
             {myClubs.length > 0 ? (
               <div className="space-y-4">
-                {(myClubs as any[]).map((club) => (
+                {myClubs.map((club) => (
                   <ClubListItem key={club.id} club={club} />
                 ))}
               </div>
@@ -132,13 +211,12 @@ export default function ProfilePage() {
           <CardContent>
             {readingHistory.length > 0 ? (
               <div className="space-y-3">
-                {(readingHistory as any[]).slice(0, 6).map((ub) => (
+                {readingHistory.slice(0, 6).map((ub) => (
                   <div key={ub.id} className="flex items-center gap-3">
                     <Image
                       src={ub.coverUrl || `https://picsum.photos/seed/${ub.bookId}/40/60`}
                       alt={ub.title || ub.bookId}
-                      width={40}
-                      height={60}
+                      width={40} height={60}
                       className="rounded-sm shadow-sm"
                     />
                     <div className="flex-1 min-w-0">
@@ -147,16 +225,12 @@ export default function ProfilePage() {
                       {ub.rating && (
                         <div className="flex gap-0.5 mt-1">
                           {[...Array(5)].map((_, i) => (
-                            <span key={i} className={i < ub.rating ? 'text-yellow-400' : 'text-gray-300'}>
-                              ★
-                            </span>
+                            <span key={i} className={i < ub.rating ? 'text-yellow-400' : 'text-gray-300'}>★</span>
                           ))}
                         </div>
                       )}
                     </div>
-                    <Badge variant="outline" className="text-xs shrink-0">
-                      {ub.format}
-                    </Badge>
+                    <Badge variant="outline" className="text-xs shrink-0">{ub.format}</Badge>
                   </div>
                 ))}
               </div>
@@ -179,9 +253,7 @@ function ClubListItem({ club }: { club: any }) {
         {club.name?.charAt(0)}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-semibold truncate group-hover:text-primary transition-colors">
-          {club.name}
-        </p>
+        <p className="font-semibold truncate group-hover:text-primary transition-colors">{club.name}</p>
         <p className="text-sm text-muted-foreground truncate">{club.description}</p>
       </div>
       <Badge variant="outline" className="text-xs shrink-0">
