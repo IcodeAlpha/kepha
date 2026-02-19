@@ -5,22 +5,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { BookOpen, Coffee, Send, Timer, Users, Circle } from "lucide-react";
-import type { User, Book, ChatMessage } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
+import { BookOpen, Coffee, Send, Timer, Users } from "lucide-react";
+import type { Book } from "@/lib/types";
 
 interface ActiveReader {
-  user: User & { id: string };
+  user: { id: string; name: string; avatarUrl: string };
   currentBook: Book;
   currentChapter?: number;
-  joinedAt: string;
+  joinedAt: any; // Firestore Timestamp or string
+}
+
+interface ChatMessage {
+  id: string;
+  userId: string;
+  content: string;
+  timestamp: any; // Firestore Timestamp
+  type: string;
 }
 
 interface ReadingRoomProps {
   clubName: string;
   activeReaders: ActiveReader[];
   chatMessages: ChatMessage[];
+  allUsers: any[]; // members array from Firestore for name lookups
   onSendMessage: (message: string) => void;
   isInSession?: boolean;
   onJoinSession?: () => void;
@@ -31,10 +40,11 @@ export function ReadingRoom({
   clubName,
   activeReaders,
   chatMessages,
+  allUsers,
   onSendMessage,
   isInSession = false,
   onJoinSession,
-  onLeaveSession
+  onLeaveSession,
 }: ReadingRoomProps) {
   const [message, setMessage] = useState('');
 
@@ -57,7 +67,8 @@ export function ReadingRoom({
                 Reading Together Now
               </CardTitle>
               <CardDescription>
-                {activeReaders.length} {activeReaders.length === 1 ? 'person' : 'people'} reading
+                {activeReaders.length}{' '}
+                {activeReaders.length === 1 ? 'person' : 'people'} reading
               </CardDescription>
             </div>
             {!isInSession ? (
@@ -95,7 +106,7 @@ export function ReadingRoom({
                     <div className="relative">
                       <Avatar className="h-12 w-12">
                         <AvatarImage src={reader.user.avatarUrl} alt={reader.user.name} />
-                        <AvatarFallback>{reader.user.name.charAt(0)}</AvatarFallback>
+                        <AvatarFallback>{reader.user.name?.charAt(0)}</AvatarFallback>
                       </Avatar>
                       <div className="absolute -bottom-1 -right-1 h-3 w-3 bg-green-500 rounded-full border-2 border-background" />
                     </div>
@@ -141,7 +152,7 @@ export function ReadingRoom({
             ) : (
               <div className="space-y-3">
                 {chatMessages.map((msg) => (
-                  <ChatMessageItem key={msg.id} message={msg} />
+                  <ChatMessageItem key={msg.id} message={msg} users={allUsers} />
                 ))}
               </div>
             )}
@@ -180,29 +191,41 @@ export function ReadingRoom({
   );
 }
 
-function ChatMessageItem({ message }: { message: ChatMessage }) {
-  // Mock user lookup - in real app, you'd fetch from users array
-  const userName = "User"; // Replace with actual user lookup
+// ── ChatMessageItem: looks up real user from allUsers ─────────────────────────
+function ChatMessageItem({ message, users }: { message: ChatMessage; users: any[] }) {
+  const msgUser = users.find((u) => u.userId === message.userId || u.id === message.userId);
+  const displayName = msgUser?.name || 'Reader';
+  const avatarUrl = msgUser?.avatarUrl;
+
+  // Firestore Timestamp → Date, or fallback for string timestamps
+  const timestamp = message.timestamp?.toDate
+    ? message.timestamp.toDate()
+    : message.timestamp
+    ? new Date(message.timestamp)
+    : null;
 
   return (
     <div className="flex gap-2 text-sm">
+      <Avatar className="h-6 w-6">
+        <AvatarImage src={avatarUrl} />
+        <AvatarFallback>{displayName.charAt(0)}</AvatarFallback>
+      </Avatar>
       <div className="flex-1">
-        <span className="font-medium">{userName}</span>
-        <span className="text-muted-foreground text-xs ml-2">
-          {new Date(message.timestamp).toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          })}
-        </span>
+        <span className="font-medium">{displayName}</span>
+        {timestamp && (
+          <span className="text-muted-foreground text-xs ml-2">
+            {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
         <p className="text-muted-foreground mt-0.5">{message.content}</p>
       </div>
     </div>
   );
 }
 
-function getTimeElapsed(joinedAt: string): string {
+function getTimeElapsed(joinedAt: any): string {
   const now = new Date();
-  const joined = new Date(joinedAt);
+  const joined = joinedAt?.toDate ? joinedAt.toDate() : new Date(joinedAt);
   const diffMs = now.getTime() - joined.getTime();
   const diffMins = Math.floor(diffMs / 60000);
 
@@ -212,13 +235,11 @@ function getTimeElapsed(joinedAt: string): string {
   return `Reading for ${diffHours}h ${diffMins % 60}m`;
 }
 
-// Reading Session Timer Component
+// ── Reading Timer ──────────────────────────────────────────────────────────────
 export function ReadingTimer() {
   const [minutes, setMinutes] = useState(0);
   const [seconds, setSeconds] = useState(0);
   const [isActive, setIsActive] = useState(false);
-
-  // Timer logic would go here using useEffect
 
   return (
     <Card>
@@ -230,16 +251,12 @@ export function ReadingTimer() {
         <div className="flex gap-2">
           <Button
             onClick={() => setIsActive(!isActive)}
-            variant={isActive ? "secondary" : "default"}
+            variant={isActive ? 'secondary' : 'default'}
           >
             {isActive ? 'Pause' : 'Start Reading'}
           </Button>
           <Button
-            onClick={() => {
-              setMinutes(0);
-              setSeconds(0);
-              setIsActive(false);
-            }}
+            onClick={() => { setMinutes(0); setSeconds(0); setIsActive(false); }}
             variant="outline"
           >
             Reset
@@ -250,7 +267,7 @@ export function ReadingTimer() {
   );
 }
 
-// Quick reactions component for ambient chat
+// ── Quick Reactions ────────────────────────────────────────────────────────────
 export function QuickReactions({ onReact }: { onReact: (emoji: string) => void }) {
   const reactions = ['📖', '☕', '🤯', '😭', '😂', '❤️', '🔥'];
 

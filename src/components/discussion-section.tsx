@@ -1,6 +1,6 @@
 "use client";
 
-import type { Book, Chapter, DiscussionPost, User, UserNote } from "@/lib/types";
+import type { Book, Chapter, DiscussionPost, UserNote } from "@/lib/types";
 import { getAIDiscussionPrompts, getAIDiscussionSummary, getAIAudio } from "@/app/actions";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
@@ -12,115 +12,130 @@ import { Loader2, Sparkles, Trash2, Volume2, Play, Pause, MessageSquarePlus } fr
 import { useUser } from "@/firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useForm, SubmitHandler } from "react-hook-form";
-import { users as mockUsers } from "@/lib/data";
 
 interface DiscussionSectionProps {
   chapter: Chapter;
   book: Book & { id: string };
 }
 
-function Comment({ post }: { post: DiscussionPost }) {
-    const user = mockUsers.find(u => u.id === post.userId);
+// Comment now receives the full post including an optional resolved user object
+function Comment({ post }: { post: DiscussionPost & { userName?: string; userAvatar?: string } }) {
+  const displayName = post.userName || post.userId;
+  const avatarSrc = post.userAvatar;
 
-    if (!user) return null;
-
-    return (
-        <div className="flex gap-3">
-            <Avatar className="h-8 w-8">
-                <AvatarImage src={user.avatarUrl} alt={user.name} />
-                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-                <div className="flex items-baseline gap-2">
-                    <p className="font-semibold">{user.name}</p>
-                    <p className="text-xs text-muted-foreground">{new Date(post.timestamp).toLocaleDateString()}</p>
-                </div>
-                <p className="text-sm">{post.content}</p>
-                 {post.replies?.map(reply => <Comment key={reply.id} post={reply} />)}
-            </div>
+  return (
+    <div className="flex gap-3">
+      <Avatar className="h-8 w-8">
+        <AvatarImage src={avatarSrc} alt={displayName} />
+        <AvatarFallback>{displayName?.charAt(0)}</AvatarFallback>
+      </Avatar>
+      <div className="flex-1">
+        <div className="flex items-baseline gap-2">
+          <p className="font-semibold">{displayName}</p>
+          <p className="text-xs text-muted-foreground">
+            {new Date(post.timestamp).toLocaleDateString()}
+          </p>
         </div>
-    )
+        <p className="text-sm">{post.content}</p>
+        {post.replies?.map((reply: any) => (
+          <Comment key={reply.id} post={reply} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function CommentForm({ onCommentSubmit }: { onCommentSubmit: (content: string) => void }) {
-    const { register, handleSubmit, reset } = useForm<{ content: string }>();
-    const { user } = useUser();
+  const { register, handleSubmit, reset } = useForm<{ content: string }>();
+  const { user } = useUser();
 
-    const onSubmit: SubmitHandler<{ content: string }> = (data) => {
-        onCommentSubmit(data.content);
-        reset();
-    };
+  const onSubmit: SubmitHandler<{ content: string }> = (data) => {
+    onCommentSubmit(data.content);
+    reset();
+  };
 
-    return (
-        <form onSubmit={handleSubmit(onSubmit)} className="flex gap-3 items-start mt-6">
-             <Avatar className="h-8 w-8">
-                <AvatarImage src={user?.photoURL || undefined} alt={user?.displayName || "You"} />
-                <AvatarFallback>{user?.displayName?.charAt(0) || 'U'}</AvatarFallback>
-            </Avatar>
-            <div className="flex-1 space-y-2">
-                <Textarea 
-                    placeholder="Share your thoughts on this chapter..." 
-                    {...register("content", { required: true })} 
-                    rows={2}
-                />
-                <Button type="submit">
-                    <MessageSquarePlus className="mr-2"/>
-                    Post Comment
-                </Button>
-            </div>
-        </form>
-    );
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="flex gap-3 items-start mt-6">
+      <Avatar className="h-8 w-8">
+        <AvatarImage src={user?.photoURL || undefined} alt={user?.displayName || "You"} />
+        <AvatarFallback>{user?.displayName?.charAt(0) || 'U'}</AvatarFallback>
+      </Avatar>
+      <div className="flex-1 space-y-2">
+        <Textarea
+          placeholder="Share your thoughts on this chapter..."
+          {...register("content", { required: true })}
+          rows={2}
+        />
+        <Button type="submit">
+          <MessageSquarePlus className="mr-2" />
+          Post Comment
+        </Button>
+      </div>
+    </form>
+  );
 }
 
-function MyNotesSection({ bookId, chapterId }: { bookId: string; chapterId: string; }) {
-    const { user } = useUser();
-    const { register, handleSubmit, reset } = useForm<{ content: string }>();
-    const [notes, setNotes] = useState<UserNote[]>([]);
-    
-    const onSubmit: SubmitHandler<{ content: string }> = async (data) => {
-        if (!user) return;
-        
-        const newNote: UserNote = {
-            id: `note-${Date.now()}`,
-            userId: user.uid,
-            bookId,
-            chapterId,
-            content: data.content,
-            createdAt: new Date().toISOString()
-        };
+function MyNotesSection({ bookId, chapterId }: { bookId: string; chapterId: string }) {
+  const { user } = useUser();
+  const { register, handleSubmit, reset } = useForm<{ content: string }>();
+  const [notes, setNotes] = useState<UserNote[]>([]);
 
-        setNotes(prev => [...prev, newNote]);
-        reset();
+  const onSubmit: SubmitHandler<{ content: string }> = async (data) => {
+    if (!user) return;
+
+    const newNote: UserNote = {
+      id: `note-${Date.now()}`,
+      userId: user.uid, // ✅ real Auth UID
+      bookId,
+      chapterId,
+      content: data.content,
+      createdAt: new Date().toISOString(),
     };
 
-    const handleDeleteNote = (noteId: string) => {
-        setNotes(prev => prev.filter(n => n.id !== noteId));
-    }
+    setNotes((prev) => [...prev, newNote]);
+    reset();
+  };
 
-    return (
-        <div className="space-y-4">
-             <form onSubmit={handleSubmit(onSubmit)} className="space-y-2">
-                <Textarea placeholder="Add a private note..." {...register("content", { required: true })} />
-                <Button type="submit">Save Note</Button>
-            </form>
+  const handleDeleteNote = (noteId: string) => {
+    setNotes((prev) => prev.filter((n) => n.id !== noteId));
+  };
 
-            <Separator />
-            
-            <div className="space-y-3">
-                 {notes.map(note => (
-                    <Card key={note.id} className="bg-secondary/50">
-                        <CardContent className="p-4 text-sm flex justify-between items-start">
-                           <p>{note.content}</p>
-                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteNote(note.id)}>
-                                <Trash2 className="h-4 w-4" />
-                           </Button>
-                        </CardContent>
-                    </Card>
-                ))}
-                {notes.length === 0 && <p className="text-xs text-muted-foreground">Your private notes for this chapter will appear here.</p>}
-            </div>
-        </div>
-    )
+  return (
+    <div className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-2">
+        <Textarea
+          placeholder="Add a private note..."
+          {...register("content", { required: true })}
+        />
+        <Button type="submit">Save Note</Button>
+      </form>
+
+      <Separator />
+
+      <div className="space-y-3">
+        {notes.map((note) => (
+          <Card key={note.id} className="bg-secondary/50">
+            <CardContent className="p-4 text-sm flex justify-between items-start">
+              <p>{note.content}</p>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => handleDeleteNote(note.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+        {notes.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Your private notes for this chapter will appear here.
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
@@ -129,7 +144,7 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
   const [summary, setSummary] = useState<string | null>(null);
   const [isPromptsLoading, setPromptsLoading] = useState(false);
   const [isSummaryLoading, setSummaryLoading] = useState(false);
-  
+
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isAudioLoading, setAudioLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -140,15 +155,17 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
   const handleCommentSubmit = (content: string) => {
     if (!user) return;
     const newPost: DiscussionPost = {
-        id: `post-${Date.now()}`,
-        userId: 'user-1', // Mocking as current user
-        content,
-        timestamp: new Date().toISOString(),
-        replies: []
-    };
-    setDiscussion(prev => [newPost, ...prev]);
+      id: `post-${Date.now()}`,
+      userId: user.uid, // ✅ real Auth UID — replaces hardcoded 'user-1'
+      // Attach display info locally so the Comment component can render without a lookup
+      userName: user.displayName || 'Reader',
+      userAvatar: user.photoURL || undefined,
+      content,
+      timestamp: new Date().toISOString(),
+      replies: [],
+    } as any;
+    setDiscussion((prev) => [newPost, ...prev]);
   };
-
 
   const handleGeneratePrompts = async () => {
     setPromptsLoading(true);
@@ -166,16 +183,16 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
       setPromptsLoading(false);
     }
   };
-  
+
   const handleGenerateSummary = async () => {
     if (!discussion) return;
     setSummaryLoading(true);
     setSummary(null);
-    const discussionText = discussion.map(p => `${p.userId}: ${p.content}`).join('\n');
+    const discussionText = discussion.map((p) => `${p.userId}: ${p.content}`).join('\n');
     try {
       const result = await getAIDiscussionSummary({
         chapterText: chapter.content,
-        discussionText: discussionText,
+        discussionText,
       });
       setSummary(result.summary);
     } catch (error) {
@@ -184,84 +201,84 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
       setSummaryLoading(false);
     }
   };
-  
+
   const handleReadAloud = async () => {
     if (audioUrl) {
-        // If audio is already loaded, just play/pause
-        if (audioRef.current) {
-            if (isPlaying) {
-                audioRef.current.pause();
-            } else {
-                audioRef.current.play();
-            }
-            setIsPlaying(!isPlaying);
+      if (audioRef.current) {
+        if (isPlaying) {
+          audioRef.current.pause();
+        } else {
+          audioRef.current.play();
         }
-        return;
+        setIsPlaying(!isPlaying);
+      }
+      return;
     }
-
     setAudioLoading(true);
     try {
-        const result = await getAIAudio({ text: chapter.content });
-        setAudioUrl(result.audio);
+      const result = await getAIAudio({ text: chapter.content });
+      setAudioUrl(result.audio);
     } catch (error) {
-        console.error("Failed to generate audio:", error);
+      console.error("Failed to generate audio:", error);
     } finally {
-        setAudioLoading(false);
+      setAudioLoading(false);
     }
   };
 
   React.useEffect(() => {
     if (audioUrl && audioRef.current) {
-        audioRef.current.play();
-        setIsPlaying(true);
+      audioRef.current.play();
+      setIsPlaying(true);
     }
   }, [audioUrl]);
 
   React.useEffect(() => {
     const audioElement = audioRef.current;
     const onEnded = () => setIsPlaying(false);
-    if (audioElement) {
-        audioElement.addEventListener('ended', onEnded);
-    }
-    return () => {
-        if (audioElement) {
-            audioElement.removeEventListener('ended', onEnded);
-        }
-    }
+    if (audioElement) audioElement.addEventListener('ended', onEnded);
+    return () => { if (audioElement) audioElement.removeEventListener('ended', onEnded); };
   }, [audioRef]);
-
 
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-wrap gap-2">
         <Button onClick={handleGeneratePrompts} disabled={isPromptsLoading}>
-          {isPromptsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+          {isPromptsLoading
+            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            : <Sparkles className="mr-2 h-4 w-4" />}
           Spark Conversation
         </Button>
-        <Button variant="secondary" onClick={handleGenerateSummary} disabled={isSummaryLoading || (discussion?.length || 0) === 0}>
-           {isSummaryLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button
+          variant="secondary"
+          onClick={handleGenerateSummary}
+          disabled={isSummaryLoading || discussion.length === 0}
+        >
+          {isSummaryLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Summarize Discussion
         </Button>
         <Button variant="secondary" onClick={handleReadAloud} disabled={isAudioLoading}>
-            {isAudioLoading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : audioUrl ? (
-                isPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />
-            ) : (
-                <Volume2 className="mr-2 h-4 w-4" />
-            )}
-            {audioUrl ? (isPlaying ? 'Pause' : 'Play') : 'Read Aloud'}
+          {isAudioLoading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : audioUrl ? (
+            isPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />
+          ) : (
+            <Volume2 className="mr-2 h-4 w-4" />
+          )}
+          {audioUrl ? (isPlaying ? 'Pause' : 'Play') : 'Read Aloud'}
         </Button>
       </div>
 
-       {audioUrl && <audio ref={audioRef} src={audioUrl} className="w-full" controls />}
+      {audioUrl && <audio ref={audioRef} src={audioUrl} className="w-full" controls />}
 
-
-      {isPromptsLoading && <p className="text-sm text-muted-foreground">Generating discussion prompts...</p>}
+      {isPromptsLoading && (
+        <p className="text-sm text-muted-foreground">Generating discussion prompts...</p>
+      )}
       {prompts && (
         <Card className="bg-primary/10 border-primary/20">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base"><Sparkles className="text-primary"/> AI Discussion Prompts</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Sparkles className="text-primary" /> AI Discussion Prompts
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="space-y-2 list-disc pl-5">
@@ -273,37 +290,43 @@ export function DiscussionSection({ chapter, book }: DiscussionSectionProps) {
         </Card>
       )}
 
-      {isSummaryLoading && <p className="text-sm text-muted-foreground">Generating summary...</p>}
+      {isSummaryLoading && (
+        <p className="text-sm text-muted-foreground">Generating summary...</p>
+      )}
       {summary && (
         <Card>
-            <CardHeader>
-                <CardTitle className="text-base">AI Discussion Summary</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <p className="text-sm">{summary}</p>
-            </CardContent>
+          <CardHeader>
+            <CardTitle className="text-base">AI Discussion Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm">{summary}</p>
+          </CardContent>
         </Card>
       )}
 
       <Tabs defaultValue="discussion" className="w-full">
-            <TabsList>
-                <TabsTrigger value="discussion">Discussion ({discussion.length})</TabsTrigger>
-                <TabsTrigger value="notes">My Private Notes</TabsTrigger>
-            </TabsList>
-            <TabsContent value="discussion" className="pt-4">
-                <CommentForm onCommentSubmit={handleCommentSubmit} />
-                <Separator className="my-6" />
-                <div className="space-y-6">
-                {discussion?.map((post) => (
-                    <Comment key={post.id} post={post} />
-                ))}
-                {(discussion.length || 0) === 0 && <p className="text-sm text-center text-muted-foreground pt-4">No comments yet. Be the first to start the discussion!</p>}
-                </div>
-            </TabsContent>
-            <TabsContent value="notes" className="pt-4">
-                <MyNotesSection bookId={book.id} chapterId={chapter.id} />
-            </TabsContent>
-        </Tabs>
+        <TabsList>
+          <TabsTrigger value="discussion">Discussion ({discussion.length})</TabsTrigger>
+          <TabsTrigger value="notes">My Private Notes</TabsTrigger>
+        </TabsList>
+        <TabsContent value="discussion" className="pt-4">
+          <CommentForm onCommentSubmit={handleCommentSubmit} />
+          <Separator className="my-6" />
+          <div className="space-y-6">
+            {discussion.map((post) => (
+              <Comment key={post.id} post={post as any} />
+            ))}
+            {discussion.length === 0 && (
+              <p className="text-sm text-center text-muted-foreground pt-4">
+                No comments yet. Be the first to start the discussion!
+              </p>
+            )}
+          </div>
+        </TabsContent>
+        <TabsContent value="notes" className="pt-4">
+          <MyNotesSection bookId={book.id} chapterId={chapter.id} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
