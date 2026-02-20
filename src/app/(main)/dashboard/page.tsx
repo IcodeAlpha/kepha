@@ -20,15 +20,17 @@ import {
 } from "@/components/ui/select";
 import { ActivityFeedCompact } from "@/components/activity-feed";
 import { BookOpen, Users, TrendingUp, Calendar, LogOut, Plus } from "lucide-react";
-import { collection, query, where, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, serverTimestamp, doc } from 'firebase/firestore';
 import {
-  useFirestore, useUser, useCollection, useMemoFirebase, addDocumentNonBlocking,
+  useFirestore, useUser, useCollection, useDoc, useMemoFirebase, addDocumentNonBlocking,
 } from '@/firebase';
 import { getAuth, signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 
 // ── Add Book Dialog ────────────────────────────────────────────────────────────
-function AddBookDialog({ onAdd }: { onAdd: (bookId: string, title: string, author: string, format: string) => void }) {
+function AddBookDialog({ onAdd }: {
+  onAdd: (bookId: string, title: string, author: string, format: string) => void
+}) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
@@ -86,63 +88,77 @@ export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
+  const uid = user?.uid ?? null;
 
-  // ── My clubs ──────────────────────────────────────────────────────────────
+  // ── User profile ───────────────────────────────────────────────────────────
+  const userRef = useMemoFirebase(
+    () => (uid ? doc(firestore, 'users', uid) : null),
+    [firestore, uid]
+  );
+  const { data: userProfile } = useDoc(userRef);
+
+  // ── My clubs ───────────────────────────────────────────────────────────────
   const myClubsQuery = useMemoFirebase(() => {
-    if (!user) return null;
-    return query(collection(firestore, 'clubs'), where('memberIds', 'array-contains', user.uid));
-  }, [firestore, user?.uid]);
+    if (!uid) return null;
+    return query(
+      collection(firestore, 'clubs'),
+      where('memberIds', 'array-contains', uid)
+    );
+  }, [firestore, uid]);
   const { data: myClubsRaw, isLoading: clubsLoading } = useCollection(myClubsQuery);
   const myClubs: any[] = myClubsRaw ?? [];
 
-  // ── Currently reading ─────────────────────────────────────────────────────
+  // ── Currently reading ──────────────────────────────────────────────────────
   const readingQuery = useMemoFirebase(() => {
-    if (!user) return null;
-    return query(collection(firestore, 'userBooks'), where('userId', '==', user.uid), where('status', '==', 'reading'));
-  }, [firestore, user?.uid]);
+    if (!uid) return null;
+    return query(
+      collection(firestore, 'userBooks'),
+      where('userId', '==', uid),
+      where('status', '==', 'reading')
+    );
+  }, [firestore, uid]);
   const { data: currentlyReadingRaw } = useCollection(readingQuery);
   const currentlyReading: any[] = currentlyReadingRaw ?? [];
 
-  // ── Finished books ────────────────────────────────────────────────────────
+  // ── Finished books ─────────────────────────────────────────────────────────
   const finishedQuery = useMemoFirebase(() => {
-    if (!user) return null;
-    return query(collection(firestore, 'userBooks'), where('userId', '==', user.uid), where('status', '==', 'finished'));
-  }, [firestore, user?.uid]);
+    if (!uid) return null;
+    return query(
+      collection(firestore, 'userBooks'),
+      where('userId', '==', uid),
+      where('status', '==', 'finished')
+    );
+  }, [firestore, uid]);
   const { data: finishedBooksRaw } = useCollection(finishedQuery);
   const finishedBooks: any[] = finishedBooksRaw ?? [];
 
-  // ── Activity feed ─────────────────────────────────────────────────────────
-  const clubIds = myClubs.map((c) => c.id).slice(0, 10);
+  // ── Activity feed ──────────────────────────────────────────────────────────
+  // clubIds is computed INSIDE the factory so the empty-array guard
+  // always runs against the current value of myClubs at memo time.
   const activityQuery = useMemoFirebase(() => {
-    if (clubsLoading || clubIds.length === 0) return null;
+    if (!uid || clubsLoading) return null;
+    const clubIds = myClubs.map((c) => c.id).slice(0, 10); // inside factory
+    if (clubIds.length === 0) return null;                  // guard fires correctly
     return query(
       collection(firestore, 'readingActivities'),
       where('clubId', 'in', clubIds),
       orderBy('timestamp', 'desc'),
       limit(20)
     );
-  }, [firestore, clubsLoading, JSON.stringify(clubIds)]);
+  }, [firestore, uid, clubsLoading, myClubs]); // depend on myClubs directly
   const { data: activitiesRaw } = useCollection(activityQuery);
   const activities: any[] = activitiesRaw ?? [];
 
-  // ── User profile ──────────────────────────────────────────────────────────
-  const userProfileQuery = useMemoFirebase(() => {
-    if (!user) return null;
-    return query(collection(firestore, 'users'), where('uid', '==', user.uid), limit(1));
-  }, [firestore, user?.uid]);
-  const { data: userProfileDocsRaw } = useCollection(userProfileQuery);
-  const userProfile = (userProfileDocsRaw ?? [])[0] as any;
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  // ── Handlers ───────────────────────────────────────────────────────────────
   const handleSignOut = async () => {
     await signOut(getAuth());
     router.push('/login');
   };
 
   const handleAddBook = (bookId: string, title: string, author: string, format: string) => {
-    if (!user) return;
+    if (!uid) return;
     addDocumentNonBlocking(collection(firestore, 'userBooks'), {
-      userId: user.uid,
+      userId: uid,
       bookId,
       title,
       author,
@@ -166,10 +182,11 @@ export default function DashboardPage() {
     );
   }
 
-  const displayName = user.displayName || userProfile?.name || 'Reader';
-  const avatarUrl = user.photoURL || userProfile?.avatarUrl;
-  const bio = userProfile?.bio || 'Happy reading! Share your journey with your book clubs.';
-  const favoriteGenres: string[] = userProfile?.favoriteGenres ?? [];
+  const profile = userProfile as any;
+  const displayName = user.displayName || profile?.name || 'Reader';
+  const avatarUrl = user.photoURL || profile?.avatarUrl;
+  const bio = profile?.bio || 'Happy reading! Share your journey with your book clubs.';
+  const favoriteGenres: string[] = profile?.favoriteGenres ?? [];
 
   return (
     <div className="space-y-6">
@@ -189,14 +206,12 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
-          {/* Profile actions */}
           <div className="flex gap-2 mt-4">
             <Button variant="outline" size="sm" asChild>
               <Link href="/profile">Edit Profile</Link>
             </Button>
             <Button
-              variant="outline"
-              size="sm"
+              variant="outline" size="sm"
               onClick={handleSignOut}
               className="text-destructive hover:text-destructive hover:bg-destructive/10"
             >
@@ -215,7 +230,9 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{currentlyReading.length}</div>
-            <p className="text-xs text-muted-foreground">{currentlyReading.length === 1 ? 'book' : 'books'} in progress</p>
+            <p className="text-xs text-muted-foreground">
+              {currentlyReading.length === 1 ? 'book' : 'books'} in progress
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -278,7 +295,9 @@ export default function DashboardPage() {
                         <div className="flex justify-between text-xs">
                           <span className="text-muted-foreground">{ub.progressPercent ?? 0}%</span>
                           {ub.currentPage && ub.pageCount && (
-                            <span className="text-muted-foreground">pg {ub.currentPage} / {ub.pageCount}</span>
+                            <span className="text-muted-foreground">
+                              pg {ub.currentPage} / {ub.pageCount}
+                            </span>
                           )}
                         </div>
                         <Progress value={ub.progressPercent ?? 0} className="h-1.5" />
@@ -304,10 +323,16 @@ export default function DashboardPage() {
             <CardDescription>What's happening in your clubs</CardDescription>
           </CardHeader>
           <CardContent>
-            {activities.length > 0 ? (
+            {clubsLoading ? (
+              <p className="text-center text-muted-foreground py-8 text-sm">Loading activity...</p>
+            ) : activities.length > 0 ? (
               <ActivityFeedCompact activities={activities as any} />
             ) : (
-              <p className="text-center text-muted-foreground py-8">No recent activity</p>
+              <p className="text-center text-muted-foreground py-8">
+                {myClubs.length === 0
+                  ? 'Join a club to see activity here!'
+                  : 'No recent activity in your clubs'}
+              </p>
             )}
           </CardContent>
         </Card>
@@ -330,7 +355,9 @@ export default function DashboardPage() {
                 <Link key={club.id} href={`/clubs/${club.id}`} className="group">
                   <Card className="hover:shadow-md transition-shadow">
                     <CardHeader>
-                      <CardTitle className="text-lg group-hover:text-primary transition-colors">{club.name}</CardTitle>
+                      <CardTitle className="text-lg group-hover:text-primary transition-colors">
+                        {club.name}
+                      </CardTitle>
                       <CardDescription className="line-clamp-2">{club.description}</CardDescription>
                     </CardHeader>
                     <CardContent>

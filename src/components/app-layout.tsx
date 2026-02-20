@@ -1,49 +1,29 @@
-
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  Book,
-  LayoutDashboard,
-  Library,
-  PanelLeft,
-  Settings,
-  User as UserIcon,
-  Users,
+  Book, LayoutDashboard, Library, PanelLeft, Settings, User as UserIcon, Users,
 } from "lucide-react";
-
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarInset,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarProvider,
-  SidebarTrigger,
+  Sidebar, SidebarContent, SidebarHeader, SidebarInset, SidebarMenu,
+  SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Logo } from "./logo";
 import { useUser } from "@/firebase";
-import { initiateAnonymousSignIn } from "@/firebase/non-blocking-login";
-import { getAuth } from "firebase/auth";
+import { getAuth, signOut } from "firebase/auth";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/discover", icon: Library, label: "Discover" },
-  { href: "/clubs", icon: Users, label: "Clubs" },
+  { href: "/discover",  icon: Library,         label: "Discover"   },
+  { href: "/clubs",     icon: Users,            label: "Clubs"      },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -51,25 +31,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, isUserLoading } = useUser();
 
   if (isUserLoading) {
-    // You can render a loading skeleton here
     return (
-       <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen">
         <div className="flex items-center gap-2">
           <Book className="h-8 w-8 animate-pulse text-primary" />
-          <span className="text-2xl font-bold">Sipha</span>
+          <span className="text-2xl font-bold">Kepha</span>
         </div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    initiateAnonymousSignIn(getAuth());
-    return (
-       <div className="flex items-center justify-center h-screen">
-         <p>Signing in...</p>
       </div>
     );
   }
+
+  // AuthGuard handles redirect — just return null here while it redirects
+  if (!user) return null;
 
   return (
     <SidebarProvider>
@@ -102,7 +75,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </SidebarTrigger>
           <div className="flex-1">
             <h1 className="text-xl font-semibold">
-              {navItems.find((item) => pathname.startsWith(item.href))?.label || "Sipha"}
+              {navItems.find((item) => pathname.startsWith(item.href))?.label || "Kepha"}
             </h1>
           </div>
           <UserMenu />
@@ -114,20 +87,26 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 function UserMenu() {
-    const { user } = useUser();
-    if (!user) return null;
+  const { user } = useUser();
+  const router = useRouter();
+
+  if (!user) return null;
+
+  const handleSignOut = async () => {
+    await signOut(getAuth());
+    router.push('/login');
+  };
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          className="relative h-10 w-10 rounded-full"
-        >
+        <Button variant="ghost" className="relative h-10 w-10 rounded-full">
           <Avatar className="h-10 w-10">
             <AvatarImage src={user.photoURL || undefined} alt={user.displayName || ""} />
             <AvatarFallback>
-              {user.displayName ? user.displayName.charAt(0).toUpperCase() : user.email?.charAt(0).toUpperCase()}
+              {user.displayName
+                ? user.displayName.charAt(0).toUpperCase()
+                : user.email?.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
         </Button>
@@ -135,7 +114,7 @@ function UserMenu() {
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.displayName || "Anonymous User"}</p>
+            <p className="text-sm font-medium leading-none">{user.displayName || "Reader"}</p>
             <p className="text-xs leading-none text-muted-foreground">
               {user.email || user.uid}
             </p>
@@ -143,18 +122,27 @@ function UserMenu() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <Link href="/dashboard">
-            <DropdownMenuItem>
-                <UserIcon className="mr-2 h-4 w-4" />
-                <span>Dashboard</span>
-            </DropdownMenuItem>
+          <DropdownMenuItem>
+            <UserIcon className="mr-2 h-4 w-4" />
+            <span>Dashboard</span>
+          </DropdownMenuItem>
+        </Link>
+        <Link href="/profile">
+          <DropdownMenuItem>
+            <UserIcon className="mr-2 h-4 w-4" />
+            <span>Profile</span>
+          </DropdownMenuItem>
         </Link>
         <DropdownMenuItem>
           <Settings className="mr-2 h-4 w-4" />
           <span>Settings</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
-          <span>Log out</span>
+        <DropdownMenuItem
+          onClick={handleSignOut}
+          className="text-destructive focus:text-destructive cursor-pointer"
+        >
+          <span>Sign Out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -11,33 +11,14 @@ import {
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-/** Utility type to add an 'id' field to a given type T. */
 type WithId<T> = T & { id: string };
 
-/**
- * Interface for the return value of the useDoc hook.
- * @template T Type of the document data.
- */
 export interface UseDocResult<T> {
-  data: WithId<T> | null; // Document data with ID, or null.
-  isLoading: boolean;       // True if loading.
-  error: FirestoreError | Error | null; // Error object, or null.
+  data: WithId<T> | null;
+  isLoading: boolean;
+  error: FirestoreError | Error | null;
 }
 
-/**
- * React hook to subscribe to a single Firestore document in real-time.
- * Handles nullable references.
- * 
- * IMPORTANT! YOU MUST MEMOIZE the inputted memoizedTargetRefOrQuery or BAD THINGS WILL HAPPEN
- * use useMemo to memoize it per React guidence.  Also make sure that it's dependencies are stable
- * references
- *
- *
- * @template T Optional type for document data. Defaults to any.
- * @param {DocumentReference<DocumentData> | null | undefined} docRef -
- * The Firestore DocumentReference. Waits if null/undefined.
- * @returns {UseDocResult<T>} Object with data, isLoading, error.
- */
 export function useDoc<T = any>(
   memoizedDocRef: DocumentReference<DocumentData> | null | undefined,
 ): UseDocResult<T> {
@@ -57,37 +38,64 @@ export function useDoc<T = any>(
 
     setIsLoading(true);
     setError(null);
-    // Optional: setData(null); // Clear previous data instantly
 
-    const unsubscribe = onSnapshot(
-      memoizedDocRef,
-      (snapshot: DocumentSnapshot<DocumentData>) => {
-        if (snapshot.exists()) {
-          setData({ ...(snapshot.data() as T), id: snapshot.id });
-        } else {
-          // Document does not exist
-          setData(null);
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+    let unsubscribe: (() => void) | null = null;
+
+    const subscribe = (isRetry = false) => {
+      unsubscribe = onSnapshot(
+        memoizedDocRef,
+        (snapshot: DocumentSnapshot<DocumentData>) => {
+          if (snapshot.exists()) {
+            setData({ ...(snapshot.data() as T), id: snapshot.id });
+          } else {
+            setData(null);
+          }
+          setError(null);
+          setIsLoading(false);
+        },
+        (err: FirestoreError) => {
+          const contextualError = new FirestorePermissionError({
+            operation: 'get',
+            path: memoizedDocRef.path,
+          });
+
+          if (err.code === 'permission-denied' && !isRetry) {
+            // Auth token may not have propagated yet — retry after a short delay
+            setError(err);
+            setData(null);
+            setIsLoading(false);
+
+            retryTimeout = setTimeout(() => {
+              if (unsubscribe) {
+                unsubscribe();
+                unsubscribe = null;
+              }
+              subscribe(true); // retry once
+            }, 1500);
+          } else {
+            // Real error — either not permission-denied, or retry also failed
+            setError(contextualError);
+            setData(null);
+            setIsLoading(false);
+
+            // Only crash globally if it's not a permission error
+            // Permission errors on user profile docs are often just auth race conditions
+            if (err.code !== 'permission-denied') {
+              errorEmitter.emit('permission-error', contextualError);
+            }
+          }
         }
-        setError(null); // Clear any previous error on successful snapshot (even if doc doesn't exist)
-        setIsLoading(false);
-      },
-      (error: FirestoreError) => {
-        const contextualError = new FirestorePermissionError({
-          operation: 'get',
-          path: memoizedDocRef.path,
-        })
+      );
+    };
 
-        setError(contextualError)
-        setData(null)
-        setIsLoading(false)
+    subscribe();
 
-        // trigger global error propagation
-        errorEmitter.emit('permission-error', contextualError);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [memoizedDocRef]); // Re-run if the memoizedDocRef changes.
+    return () => {
+      if (retryTimeout) clearTimeout(retryTimeout);
+      if (unsubscribe) unsubscribe();
+    };
+  }, [memoizedDocRef]);
 
   return { data, isLoading, error };
 }
