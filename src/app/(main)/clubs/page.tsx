@@ -87,7 +87,10 @@ function CreateClubDialog({ onCreate }: {
 // ── Club Card ─────────────────────────────────────────────────────────────────
 function ClubCard({ club, isMember, onJoin }: { club: any; isMember: boolean; onJoin: (clubId: string) => void }) {
   const firestore = useFirestore();
-  const membersRef = useMemoFirebase(() => collection(firestore, 'clubs', club.id, 'members'), [firestore, club.id]);
+  const membersRef = useMemoFirebase(
+    () => collection(firestore, 'clubs', club.id, 'members'),
+    [firestore, club.id]
+  );
   const { data: membersRaw } = useCollection(membersRef);
   const members: any[] = membersRaw ?? [];
 
@@ -157,10 +160,11 @@ export default function ClubsPage() {
   const { data: myClubsRaw } = useCollection(myClubsQuery);
   const myClubs: any[] = myClubsRaw ?? [];
 
-  // All public clubs
+  // All public clubs — guarded by user to prevent unauthenticated list
   const publicClubsQuery = useMemoFirebase(() => {
+    if (!user) return null;
     return query(collection(firestore, 'clubs'), where('isPublic', '==', true));
-  }, [firestore]);
+  }, [firestore, user?.uid]);
   const { data: allPublicClubsRaw } = useCollection(publicClubsQuery);
   const allPublicClubs: any[] = allPublicClubsRaw ?? [];
 
@@ -174,7 +178,6 @@ export default function ClubsPage() {
     if (!user) return;
     const clubId = data.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
-    // Write the club doc
     await setDocumentNonBlocking(
       doc(firestore, 'clubs', clubId),
       {
@@ -186,7 +189,6 @@ export default function ClubsPage() {
       { merge: false }
     );
 
-    // Write the owner member doc
     setDocumentNonBlocking(
       doc(firestore, 'clubs', clubId, 'members', user.uid),
       {
@@ -198,7 +200,6 @@ export default function ClubsPage() {
       { merge: false }
     );
 
-    // Post activity
     addDocumentNonBlocking(collection(firestore, 'readingActivities'), {
       userId: user.uid,
       clubId,

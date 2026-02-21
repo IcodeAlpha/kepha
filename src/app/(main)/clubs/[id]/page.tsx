@@ -153,7 +153,7 @@ export default function ClubDetailsPage() {
   const { data: discussionsRaw } = useCollection(discussionsRef);
   const discussions: any[] = discussionsRaw ?? [];
 
-  // ── Activity feed — GUARDED: only fires when id is available ──────────────
+  // ── Activity feed ─────────────────────────────────────────────────────────
   const activitiesQuery = useMemoFirebase(() => {
     if (!id) return null;
     return query(
@@ -165,8 +165,10 @@ export default function ClubDetailsPage() {
   const { data: clubActivitiesRaw } = useCollection(activitiesQuery);
   const clubActivities: any[] = clubActivitiesRaw ?? [];
 
-  // ── Loading state ─────────────────────────────────────────────────────────
-  if (isLoading) {
+  // ── Loading state — combined to prevent premature notFound() ─────────────
+  // On first render isLoading=false and club=null before useDoc fires,
+  // so we must show loading for BOTH states to avoid a flash of notFound.
+  if (isLoading || !club) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -177,8 +179,6 @@ export default function ClubDetailsPage() {
     );
   }
 
-  if (!club) return notFound();
-
   const clubData = club as any;
 
   const generalDiscussions = discussions.filter(
@@ -187,11 +187,9 @@ export default function ClubDetailsPage() {
   const bookDiscussions = discussions.filter(d => d.type === 'book-specific');
   const thematicDiscussions = discussions.filter(d => d.type === 'thematic');
 
-  // ── Add book handler ──────────────────────────────────────────────────────
   const handleAddBook = (bookId: string, title: string, author: string, format: string) => {
     if (!user) return;
 
-    // Add to user's personal shelf
     addDocumentNonBlocking(collection(firestore, 'userBooks'), {
       userId: user.uid,
       bookId,
@@ -205,7 +203,6 @@ export default function ClubDetailsPage() {
       updatedAt: serverTimestamp(),
     });
 
-    // Post activity to the club feed
     addDocumentNonBlocking(collection(firestore, 'readingActivities'), {
       userId: user.uid,
       clubId: id,
