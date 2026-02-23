@@ -22,6 +22,7 @@ import {
   useFirestore, useUser, useCollection, useMemoFirebase,
   updateDocumentNonBlocking, addDocumentNonBlocking, setDocumentNonBlocking,
 } from '@/firebase';
+import { ClubEligibilityGate } from '@/components/club-eligibility-gate';
 
 // ── Create Club Dialog ────────────────────────────────────────────────────────
 function CreateClubDialog({ onCreate }: {
@@ -152,7 +153,6 @@ export default function ClubsPage() {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  // My clubs
   const myClubsQuery = useMemoFirebase(() => {
     if (!user) return null;
     return query(collection(firestore, 'clubs'), where('memberIds', 'array-contains', user.uid));
@@ -160,7 +160,6 @@ export default function ClubsPage() {
   const { data: myClubsRaw } = useCollection(myClubsQuery);
   const myClubs: any[] = myClubsRaw ?? [];
 
-  // All public clubs — guarded by user to prevent unauthenticated list
   const publicClubsQuery = useMemoFirebase(() => {
     if (!user) return null;
     return query(collection(firestore, 'clubs'), where('isPublic', '==', true));
@@ -171,7 +170,6 @@ export default function ClubsPage() {
   const myClubIds = new Set(myClubs.map((c) => c.id));
   const publicClubs = allPublicClubs.filter((c) => !myClubIds.has(c.id));
 
-  // ── Create club ───────────────────────────────────────────────────────────
   const handleCreateClub = async (data: {
     name: string; description: string; vibe: string; theme: string; isPublic: boolean
   }) => {
@@ -180,35 +178,21 @@ export default function ClubsPage() {
 
     await setDocumentNonBlocking(
       doc(firestore, 'clubs', clubId),
-      {
-        ...data,
-        memberIds: [user.uid],
-        ownerId: user.uid,
-        createdAt: serverTimestamp(),
-      },
+      { ...data, memberIds: [user.uid], ownerId: user.uid, createdAt: serverTimestamp() },
       { merge: false }
     );
 
     setDocumentNonBlocking(
       doc(firestore, 'clubs', clubId, 'members', user.uid),
-      {
-        userId: user.uid,
-        role: 'owner',
-        isOnline: false,
-        joinedAt: serverTimestamp(),
-      },
+      { userId: user.uid, role: 'owner', isOnline: false, joinedAt: serverTimestamp() },
       { merge: false }
     );
 
     addDocumentNonBlocking(collection(firestore, 'readingActivities'), {
-      userId: user.uid,
-      clubId,
-      type: 'joined-club',
-      timestamp: serverTimestamp(),
+      userId: user.uid, clubId, type: 'joined-club', timestamp: serverTimestamp(),
     });
   };
 
-  // ── Join club ─────────────────────────────────────────────────────────────
   const handleJoinClub = (clubId: string) => {
     if (!user) return;
 
@@ -236,10 +220,11 @@ export default function ClubsPage() {
             Find your reading community. Everyone reads their own book, together.
           </p>
         </div>
-        <CreateClubDialog onCreate={handleCreateClub} />
+        <ClubEligibilityGate>
+          <CreateClubDialog onCreate={handleCreateClub} />
+        </ClubEligibilityGate>
       </div>
 
-      {/* My Clubs */}
       <section className="space-y-4">
         <h2 className="text-2xl font-bold">My Clubs</h2>
         {myClubs.length > 0 ? (
@@ -262,7 +247,6 @@ export default function ClubsPage() {
 
       <Separator />
 
-      {/* Explore */}
       <section className="space-y-4" id="explore">
         <div>
           <h2 className="text-2xl font-bold">Explore Public Clubs</h2>
