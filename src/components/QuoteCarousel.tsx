@@ -2,10 +2,9 @@
 
 import React from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination } from 'swiper/modules';
-import { Star, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Pagination } from 'swiper/modules';
+import { Star } from 'lucide-react';
 import 'swiper/css';
-import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 
 interface Quote {
@@ -95,25 +94,21 @@ export default function QuoteCarousel() {
         </div>
 
         {/* Carousel Container */}
-        <div className="relative group">
+        <div className="relative">
           <Swiper
             ref={swiperRef}
-            modules={[Navigation, Pagination]}
+            modules={[Pagination]}
             spaceBetween={24}
             slidesPerView={1}
             breakpoints={{
-              640: {
-                slidesPerView: 2,
-              },
-              1024: {
-                slidesPerView: 3,
-              },
+              640: { slidesPerView: 2 },
+              1024: { slidesPerView: 3 },
             }}
             pagination={{
               clickable: true,
               dynamicBullets: true,
             }}
-            className="pb-12"
+            className="pb-12 swiper-beige-dots"
           >
             {mockQuotes.map((quote) => (
               <SwiperSlide key={quote.id}>
@@ -123,7 +118,7 @@ export default function QuoteCarousel() {
                   {/* Quote Text */}
                   <div className="mb-6 overflow-hidden">
                     <p className="text-white text-lg leading-relaxed font-medium line-clamp-6">
-                      "{quote.text}"
+                      &ldquo;{quote.text}&rdquo;
                     </p>
                   </div>
 
@@ -134,7 +129,8 @@ export default function QuoteCarousel() {
                         {quote.author}
                       </p>
                       <p className="text-white/80 text-sm mt-1">
-                        {quote.bookTitle} <span className="text-white/60">by {quote.bookAuthor}</span>
+                        {quote.bookTitle}{' '}
+                        <span className="text-white/60">by {quote.bookAuthor}</span>
                       </p>
                     </div>
                     <StarRating rating={quote.rating} />
@@ -143,34 +139,18 @@ export default function QuoteCarousel() {
               </SwiperSlide>
             ))}
           </Swiper>
-
-          {/* Custom Navigation Buttons */}
-          <button
-            onClick={() => swiperRef.current?.swiper.slidePrev()}
-            className="absolute -left-16 top-1/3 -translate-y-1/2 z-10 p-3 rounded-full bg-gray-900 text-white hover:bg-gray-800 transition-colors opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden lg:flex items-center justify-center"
-            aria-label="Previous slide"
-          >
-            <ChevronLeft size={24} />
-          </button>
-
-          <button
-            onClick={() => swiperRef.current?.swiper.slideNext()}
-            className="absolute -right-16 top-1/3 -translate-y-1/2 z-10 p-3 rounded-full bg-gray-900 text-white hover:bg-gray-800 transition-colors opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden lg:flex items-center justify-center"
-            aria-label="Next slide"
-          >
-            <ChevronRight size={24} />
-          </button>
         </div>
       </div>
 
       <style jsx>{`
-        :global(.swiper-pagination-bullet) {
-          background-color: rgba(0, 0, 0, 0.3);
-          transition: background-color 0.3s;
+        :global(.swiper-beige-dots .swiper-pagination-bullet) {
+          background-color: #d4b896;
+          opacity: 0.5;
         }
 
-        :global(.swiper-pagination-bullet-active) {
-          background-color: rgba(0, 0, 0, 0.8);
+        :global(.swiper-beige-dots .swiper-pagination-bullet-active) {
+          background-color: #c9a97a;
+          opacity: 1;
         }
       `}</style>
     </div>
