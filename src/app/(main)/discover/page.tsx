@@ -10,7 +10,8 @@ import {
 import {
   Loader2, Search, Upload, BookOpen, TrendingUp, BookMarked,
   X, Bookmark, BookCheck, ChevronDown, Calendar, Hash, User,
-  Tag, Plus, ExternalLink, Minus, Type, ArrowLeft,
+  Tag, Plus, ExternalLink, ChevronLeft, ChevronRight, List,
+  Sun, Moon, Type, Minus,
 } from "lucide-react";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { users as allUsers } from "@/lib/data";
@@ -26,7 +27,7 @@ type CommunityBook = {
   publishYear?: number; pageCount?: number; olKey?: string;
 };
 type BookDetail = { description?: string; subjects?: string[]; firstSentence?: string };
-type ReadingEntry = { book: CommunityBook; pagesRead: number; savedAt: number; scrollPosition?: number };
+type ReadingEntry = { book: CommunityBook; pagesRead: number; savedAt: number; cfi?: string };
 type Tab = 'trending' | 'classics' | 'search' | 'community' | 'readinglist';
 
 // ── Open Library ─────────────────────────────────────────────────────────────
@@ -67,111 +68,266 @@ async function fetchBookDetail(olKey: string): Promise<BookDetail> {
   } catch { return {}; }
 }
 
-// ── Gutenberg (via server-side proxy) ────────────────────────────────────────
+// ── Gutenberg search ──────────────────────────────────────────────────────────
 
-async function findGutenbergTextUrl(title: string, author: string): Promise<string | null> {
+async function findGutenbergUrls(title: string, author: string): Promise<{ epubUrl: string | null; textUrl: string | null }> {
   try {
     const res = await fetch(
       `/api/gutenberg/search?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}`
     );
-    if (!res.ok) return null;
+    if (!res.ok) return { epubUrl: null, textUrl: null };
     const data = await res.json();
-    return data.textUrl ?? null;
-  } catch { return null; }
+    return { epubUrl: data.epubUrl ?? null, textUrl: data.textUrl ?? null };
+  } catch { return { epubUrl: null, textUrl: null }; }
 }
 
-async function loadGutenbergText(textUrl: string): Promise<string | null> {
-  try {
-    const res = await fetch(`/api/gutenberg/text?url=${encodeURIComponent(textUrl)}`);
-    if (!res.ok) return null;
-    return await res.text();
-  } catch { return null; }
-}
+// ── Epub Reader Modal ─────────────────────────────────────────────────────────
+// Uses epub.js loaded inside an iframe via inline HTML to avoid SSR/import issues
 
-// ── In-App Reader Modal ───────────────────────────────────────────────────────
-
-function ReaderModal({ book, open, onClose, onScrollSave, savedScroll }: {
-  book: CommunityBook | null; open: boolean; onClose: () => void;
-  onScrollSave: (bookId: string, scroll: number) => void; savedScroll?: number;
+function EpubReaderModal({ book, open, onClose, onSaveCfi, savedCfi }: {
+  book: CommunityBook | null;
+  open: boolean;
+  onClose: () => void;
+  onSaveCfi: (bookId: string, cfi: string) => void;
+  savedCfi?: string;
 }) {
-  const [text, setText] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fontSize, setFontSize] = useState(17);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [epubProxyUrl, setEpubProxyUrl] = useState<string | null>(null);
+  const [theme, setTheme] = useState<'light' | 'sepia' | 'dark'>('sepia');
+  const [fontSize, setFontSize] = useState(100);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     if (!book || !open) return;
-    setText(null); setError(null); setLoading(true);
+    setError(null); setEpubProxyUrl(null); setLoading(true);
 
     (async () => {
-      const textUrl = await findGutenbergTextUrl(book.title, book.author);
-      if (!textUrl) {
+      const { epubUrl } = await findGutenbergUrls(book.title, book.author);
+      if (!epubUrl) {
         setError("This book wasn't found on Project Gutenberg.");
         setLoading(false); return;
       }
-      const content = await loadGutenbergText(textUrl);
-      if (!content) {
-        setError("Found the book but couldn't load its text. Try the Open Library link.");
-        setLoading(false); return;
-      }
-      setText(content);
+      // Use our proxy to serve the epub (avoids CORS)
+      setEpubProxyUrl(`/api/gutenberg/epub?url=${encodeURIComponent(epubUrl)}`);
       setLoading(false);
     })();
   }, [book, open]);
 
-  useEffect(() => {
-    if (text && savedScroll && scrollRef.current) {
-      setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = savedScroll; }, 150);
-    }
-  }, [text, savedScroll]);
-
-  const handleScroll = () => {
-    if (!book || !scrollRef.current) return;
-    const pos = scrollRef.current.scrollTop;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => onScrollSave(book.id, pos), 800);
+  // Send messages to iframe to control the reader
+  const sendMsg = (msg: object) => {
+    iframeRef.current?.contentWindow?.postMessage(msg, '*');
   };
+
+  // Listen for CFI updates from iframe (saved reading position)
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'cfi-update' && book) {
+        onSaveCfi(book.id, e.data.cfi);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [book, onSaveCfi]);
+
+  // Send theme/font changes to iframe
+  useEffect(() => { sendMsg({ type: 'set-theme', theme }); }, [theme]);
+  useEffect(() => { sendMsg({ type: 'set-font-size', size: fontSize }); }, [fontSize]);
 
   if (!book) return null;
 
+  const themes = {
+    light: { bg: '#ffffff', text: '#1a1a1a', label: 'White' },
+    sepia: { bg: '#f4ede4', text: '#3b2f1e', label: 'Sepia' },
+    dark:  { bg: '#1a1a2e', text: '#e8e0d5', label: 'Dark'  },
+  };
+
+  // The iframe renders epub.js entirely client-side
+  const iframeHtml = epubProxyUrl ? `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: ${themes[theme].bg}; }
+  #viewer { width: 100%; height: 100%; }
+  .arrow {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    background: rgba(0,0,0,0.08); border: none; cursor: pointer;
+    width: 44px; height: 80px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; color: ${themes[theme].text}; z-index: 100;
+    transition: background 0.2s;
+  }
+  .arrow:hover { background: rgba(0,0,0,0.15); }
+  #prev { left: 8px; }
+  #next { right: 8px; }
+  #page-info {
+    position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+    font-family: Georgia, serif; font-size: 12px;
+    color: ${themes[theme].text}; opacity: 0.5; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="viewer"></div>
+<button class="arrow" id="prev">&#8249;</button>
+<button class="arrow" id="next">&#8250;</button>
+<div id="page-info"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
+<script>
+  const EPUB_URL = ${JSON.stringify(epubProxyUrl)};
+  const SAVED_CFI = ${JSON.stringify(savedCfi ?? null)};
+  const INIT_BG = ${JSON.stringify(themes[theme].bg)};
+  const INIT_FG = ${JSON.stringify(themes[theme].text)};
+  const INIT_FS = ${JSON.stringify(fontSize)};
+
+  let rendition = null;
+
+  // Fetch the epub as ArrayBuffer so epub.js never makes its own HTTP requests
+  fetch(EPUB_URL)
+    .then(r => r.arrayBuffer())
+    .then(buffer => {
+      const book = ePub(buffer);
+      rendition = book.renderTo('viewer', {
+        width: '100%',
+        height: '100%',
+        spread: 'none',
+        flow: 'paginated',
+      });
+
+      rendition.themes.default({
+        body: {
+          background: INIT_BG + ' !important',
+          color: INIT_FG + ' !important',
+          'font-family': 'Georgia, "Times New Roman", serif !important',
+          'font-size': INIT_FS + '% !important',
+          'line-height': '1.8 !important',
+          'padding': '0 2em !important',
+        },
+        p: { 'text-align': 'justify !important', 'margin-bottom': '1em !important' },
+      });
+
+      if (SAVED_CFI) {
+        rendition.display(SAVED_CFI);
+      } else {
+        rendition.display();
+      }
+
+      // Page navigation
+      document.getElementById('prev').addEventListener('click', () => rendition.prev());
+      document.getElementById('next').addEventListener('click', () => rendition.next());
+
+      // Report CFI position to parent
+      rendition.on('relocated', location => {
+        const cfi = location?.start?.cfi;
+        if (cfi) window.parent.postMessage({ type: 'cfi-update', cfi }, '*');
+        const info = document.getElementById('page-info');
+        if (info && location?.start?.percentage != null) {
+          info.textContent = Math.round(location.start.percentage * 100) + '% complete';
+        }
+      });
+
+      window.parent.postMessage({ type: 'ready' }, '*');
+    })
+    .catch(err => {
+      document.body.innerHTML = '<p style="padding:2rem;color:#888;font-family:Georgia,serif;">Failed to load book: ' + err.message + '</p>';
+    });
+
+  // Keyboard navigation (outside fetch, always active)
+  document.addEventListener('keydown', e => {
+    if (!rendition) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') rendition.next();
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   rendition.prev();
+  });
+
+  // Listen for control messages from parent
+  window.addEventListener('message', e => {
+    if (e.data?.type === 'prev') rendition.prev();
+    if (e.data?.type === 'next') rendition.next();
+    if (e.data?.type === 'goto-cfi') rendition.display(e.data.cfi);
+    if (e.data?.type === 'set-theme') {
+      const t = e.data.theme;
+      const themes = {
+        light: { bg: '#ffffff', text: '#1a1a1a' },
+        sepia: { bg: '#f4ede4', text: '#3b2f1e' },
+        dark:  { bg: '#1a1a2e', text: '#e8e0d5' },
+      };
+      const c = themes[t] || themes.sepia;
+      document.body.style.background = c.bg;
+      rendition.themes.default({
+        body: { background: c.bg + ' !important', color: c.text + ' !important' },
+      });
+    }
+    if (e.data?.type === 'set-font-size') {
+      const sz = e.data.size;
+      rendition.themes.fontSize(sz + '%');
+    }
+  });
+</script>
+</body>
+</html>` : '';
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-4xl w-[95vw] h-[92vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl">
+        <DialogTitle className="sr-only">{book.title}</DialogTitle>
+        <DialogDescription className="sr-only">Reading {book.title} by {book.author}</DialogDescription>
+
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 bg-stone-50 flex-shrink-0">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-stone-200 bg-white flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <button onClick={onClose} className="text-stone-400 hover:text-stone-700 transition-colors flex-shrink-0">
-              <ArrowLeft size={18} />
+            <button onClick={onClose} className="text-stone-400 hover:text-stone-700 p-1 rounded transition-colors">
+              <ChevronLeft size={20} />
             </button>
             <div className="min-w-0">
-              <p className="font-semibold text-stone-800 text-sm truncate">{book.title}</p>
+              <p className="font-semibold text-stone-800 text-sm truncate leading-tight">{book.title}</p>
               <p className="text-xs text-stone-400 truncate">{book.author}</p>
             </div>
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button onClick={() => setFontSize(s => Math.max(13, s - 1))} className="p-1.5 rounded hover:bg-stone-200 text-stone-500 transition-colors">
+
+          {/* Controls */}
+          <div className="flex items-center gap-1">
+            {/* Font size */}
+            <button onClick={() => setFontSize(s => Math.max(70, s - 10))}
+              className="p-1.5 rounded hover:bg-stone-100 text-stone-500 transition-colors" title="Smaller text">
               <Minus size={14} />
             </button>
-            <span className="text-xs text-stone-500 w-8 text-center">{fontSize}px</span>
-            <button onClick={() => setFontSize(s => Math.min(26, s + 1))} className="p-1.5 rounded hover:bg-stone-200 text-stone-500 transition-colors">
+            <span className="text-xs text-stone-400 w-8 text-center">{fontSize}%</span>
+            <button onClick={() => setFontSize(s => Math.min(150, s + 10))}
+              className="p-1.5 rounded hover:bg-stone-100 text-stone-500 transition-colors" title="Larger text">
               <Type size={14} />
             </button>
+
+            <div className="w-px h-5 bg-stone-200 mx-1" />
+
+            {/* Theme switcher */}
+            {(['light', 'sepia', 'dark'] as const).map(t => (
+              <button key={t} onClick={() => setTheme(t)}
+                className={`w-6 h-6 rounded-full border-2 transition-all ${theme === t ? 'border-amber-600 scale-110' : 'border-stone-300'}`}
+                style={{ background: themes[t].bg }}
+                title={themes[t].label}
+              />
+            ))}
           </div>
         </div>
 
-        {/* Body */}
-        <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-[#fdf8f2] px-8 py-10">
+        {/* Reader area */}
+        <div className="flex-1 relative overflow-hidden" style={{ background: themes[theme].bg }}>
           {loading ? (
-            <div className="flex flex-col items-center justify-center h-full gap-4 text-stone-400">
-              <Loader2 size={32} className="animate-spin text-amber-700" />
-              <p className="text-sm">Finding book on Project Gutenberg...</p>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4" style={{ background: themes[theme].bg }}>
+              <Loader2 size={36} className="animate-spin text-amber-700" />
+              <p className="text-sm" style={{ color: themes[theme].text, opacity: 0.6 }}>
+                Loading book...
+              </p>
             </div>
           ) : error ? (
-            <div className="flex flex-col items-center justify-center h-full gap-4 text-stone-400">
-              <BookOpen size={40} strokeWidth={1} />
-              <p className="text-base text-center max-w-sm">{error}</p>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center">
+              <BookOpen size={40} strokeWidth={1} className="text-stone-400" />
+              <p className="text-stone-500">{error}</p>
               {book.olKey && (
                 <a href={`https://openlibrary.org${book.olKey}`} target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" className="gap-2 text-sm">
@@ -180,12 +336,14 @@ function ReaderModal({ book, open, onClose, onScrollSave, savedScroll }: {
                 </a>
               )}
             </div>
-          ) : text ? (
-            <div className="max-w-2xl mx-auto" style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: `${fontSize}px`, lineHeight: 1.85, color: '#2c2416' }}>
-              {text.split('\n\n').map((para, i) =>
-                para.trim() ? <p key={i} className="mb-5 whitespace-pre-wrap">{para.trim()}</p> : null
-              )}
-            </div>
+          ) : epubProxyUrl ? (
+            <iframe
+              ref={iframeRef}
+              srcDoc={iframeHtml}
+              className="w-full h-full border-0"
+              title={`Reading ${book.title}`}
+              sandbox="allow-scripts allow-same-origin"
+            />
           ) : null}
         </div>
       </DialogContent>
@@ -249,7 +407,7 @@ function UploadBookDialog({ onBookUploaded }: { onBookUploaded: (book: Community
             <Label htmlFor="pages" className="text-right text-xs leading-tight">Total<br />Pages</Label>
             <Input id="pages" type="number" min="1" value={pageCount}
               onChange={e => setPageCount(e.target.value)} className="col-span-3"
-              placeholder="e.g. 320 — helps track your progress" />
+              placeholder="e.g. 320" />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="picture" className="text-right">Cover</Label>
@@ -297,6 +455,8 @@ function BookDetailModal({ book, open, onClose, onSave, isSaved, onRead }: {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogTitle className="sr-only">{book.title}</DialogTitle>
+        <DialogDescription className="sr-only">{book.author}</DialogDescription>
         <div className="flex gap-6 pt-2">
           <div className="flex-shrink-0">
             <div className="relative w-32 h-48 rounded-lg overflow-hidden shadow-lg bg-stone-100">
@@ -315,10 +475,8 @@ function BookDetailModal({ book, open, onClose, onSave, isSaved, onRead }: {
               {book.pageCount && <span className="flex items-center gap-1"><Hash size={13} /> {book.pageCount} pages</span>}
             </div>
             <div className="flex flex-wrap gap-2 mt-4">
-              <Button
-                onClick={() => onSave(book)}
-                className={`gap-2 text-sm ${isSaved ? 'bg-green-700 hover:bg-red-600 text-white' : 'bg-amber-700 hover:bg-amber-800 text-white'}`}
-              >
+              <Button onClick={() => onSave(book)}
+                className={`gap-2 text-sm ${isSaved ? 'bg-green-700 hover:bg-red-600 text-white' : 'bg-amber-700 hover:bg-amber-800 text-white'}`}>
                 {isSaved ? <BookCheck size={15} /> : <Bookmark size={15} />}
                 {isSaved ? 'Saved' : 'Save to Reading List'}
               </Button>
@@ -337,7 +495,7 @@ function BookDetailModal({ book, open, onClose, onSave, isSaved, onRead }: {
             </div>
             {isClassic && (
               <p className="text-xs text-amber-700 mt-2 flex items-center gap-1">
-                <BookOpen size={11} /> Full text available via Project Gutenberg
+                <BookOpen size={11} /> Full ebook via Project Gutenberg
               </p>
             )}
           </div>
@@ -579,18 +737,16 @@ export default function DiscoverPage() {
   };
 
   const clearSearch = () => { setInputValue(''); setSearchQuery(''); switchTab('trending'); };
-
   const toggleSave = (book: CommunityBook) => {
     setReadingList(prev => {
       const exists = prev.find(e => e.book.id === book.id);
       return exists ? prev.filter(e => e.book.id !== book.id) : [...prev, { book, pagesRead: 0, savedAt: Date.now() }];
     });
   };
-
   const isSaved = (bookId: string) => readingList.some(e => e.book.id === bookId);
   const openReader = (book: CommunityBook) => { setReaderBook(book); setReaderOpen(true); };
-  const saveScrollPosition = (bookId: string, scroll: number) =>
-    setReadingList(prev => prev.map(e => e.book.id === bookId ? { ...e, scrollPosition: scroll } : e));
+  const saveCfi = (bookId: string, cfi: string) =>
+    setReadingList(prev => prev.map(e => e.book.id === bookId ? { ...e, cfi } : e));
 
   const showApiGrid = activeTab === 'trending' || activeTab === 'classics' || activeTab === 'search';
 
@@ -657,8 +813,7 @@ export default function DiscoverPage() {
                 <BookCard key={book.id} book={book} isSaved={isSaved(book.id)}
                   onSave={(e, b) => { e.stopPropagation(); toggleSave(b); }}
                   onClick={b => { setSelectedBook(b); setDetailOpen(true); }} />
-              ))
-            }
+              ))}
           </div>
           {!isLoading && apiBooks.length > 0 && hasMore && (
             <div className="flex justify-center pt-4">
@@ -700,9 +855,13 @@ export default function DiscoverPage() {
         onRemove={bookId => setReadingList(prev => prev.filter(e => e.book.id !== bookId))}
         onRead={openReader} />
 
-      <ReaderModal book={readerBook} open={readerOpen} onClose={() => setReaderOpen(false)}
-        onScrollSave={saveScrollPosition}
-        savedScroll={readerBook ? readingList.find(e => e.book.id === readerBook.id)?.scrollPosition : undefined} />
+      <EpubReaderModal
+        book={readerBook}
+        open={readerOpen}
+        onClose={() => setReaderOpen(false)}
+        onSaveCfi={saveCfi}
+        savedCfi={readerBook ? readingList.find(e => e.book.id === readerBook.id)?.cfi : undefined}
+      />
     </div>
   );
 }
