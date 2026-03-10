@@ -45,3 +45,7 @@ firebase-debug.log
 firestore-debug.log
 
 scripts/serviceAccountKey.json
+
+# Capacitor
+android/
+ios/
