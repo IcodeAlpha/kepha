@@ -54,7 +54,7 @@ function AddBookDialog({ onAdd }: {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add a Book</DialogTitle>
-          <DialogDescription>What are you reading right now?</DialogDescription>
+          <DialogDescription>What are you reading ?</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
