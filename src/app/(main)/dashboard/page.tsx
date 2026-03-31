@@ -4,22 +4,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
-} from "@/components/ui/card";
-import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ActivityFeedCompact } from "@/components/activity-feed";
-import { BookOpen, Users, TrendingUp, Calendar, LogOut, Plus } from "lucide-react";
+import { BookOpen, Users, Clock, Calendar, Feather, Plus, LogOut } from "lucide-react";
 import { collection, query, where, orderBy, limit, serverTimestamp, doc } from 'firebase/firestore';
 import {
   useFirestore, useUser, useCollection, useDoc, useMemoFirebase, addDocumentNonBlocking,
@@ -27,7 +19,15 @@ import {
 import { getAuth, signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 
-// ── Add Book Dialog ────────────────────────────────────────────────────────────
+// ── Greeting ──────────────────────────────────────────────────────────────────
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+// ── Add Book Dialog ───────────────────────────────────────────────────────────
 function AddBookDialog({ onAdd }: {
   onAdd: (bookId: string, title: string, author: string, format: string) => void
 }) {
@@ -47,28 +47,30 @@ function AddBookDialog({ onAdd }: {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Plus className="h-4 w-4 mr-2" />Add Book
-        </Button>
+        <button className="s-btn-outline">
+          <Plus size={13} style={{ marginRight: 6 }} />New Entry
+        </button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent style={{ background: '#F5F0E8', border: '1px solid #D8D0C0' }}>
         <DialogHeader>
-          <DialogTitle>Add a Book</DialogTitle>
-          <DialogDescription>What are you reading ?</DialogDescription>
+          <DialogTitle style={{ fontFamily: "'Playfair Display', serif", fontSize: 20 }}>Add a Book</DialogTitle>
+          <DialogDescription style={{ fontSize: 13, color: '#8A8578' }}>What are you reading?</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
-            <Label>Book Title</Label>
-            <Input placeholder="e.g. Dune" value={title} onChange={e => setTitle(e.target.value)} />
+            <Label style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8578' }}>Book Title</Label>
+            <Input style={{ background: '#EDE7D9', borderColor: '#D8D0C0', fontSize: 13 }} placeholder="e.g. Dune" value={title} onChange={e => setTitle(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>Author</Label>
-            <Input placeholder="e.g. Frank Herbert" value={author} onChange={e => setAuthor(e.target.value)} />
+            <Label style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8578' }}>Author</Label>
+            <Input style={{ background: '#EDE7D9', borderColor: '#D8D0C0', fontSize: 13 }} placeholder="e.g. Frank Herbert" value={author} onChange={e => setAuthor(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>Format</Label>
+            <Label style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8578' }}>Format</Label>
             <Select value={format} onValueChange={setFormat}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger style={{ background: '#EDE7D9', borderColor: '#D8D0C0', fontSize: 13 }}>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="physical">Physical</SelectItem>
                 <SelectItem value="ebook">E-Book</SelectItem>
@@ -77,38 +79,35 @@ function AddBookDialog({ onAdd }: {
               </SelectContent>
             </Select>
           </div>
-          <Button className="w-full" onClick={handleSubmit}>Start Reading</Button>
+          <button className="s-btn-primary" style={{ width: '100%' }} onClick={handleSubmit}>
+            Start Reading
+          </button>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
   const uid = user?.uid ?? null;
 
-  // ── User profile ───────────────────────────────────────────────────────────
   const userRef = useMemoFirebase(
     () => (uid ? doc(firestore, 'users', uid) : null),
     [firestore, uid]
   );
   const { data: userProfile } = useDoc(userRef);
 
-  // ── My clubs ───────────────────────────────────────────────────────────────
   const myClubsQuery = useMemoFirebase(() => {
     if (!uid) return null;
-    return query(
-      collection(firestore, 'clubs'),
-      where('memberIds', 'array-contains', uid)
-    );
+    return query(collection(firestore, 'clubs'), where('memberIds', 'array-contains', uid));
   }, [firestore, uid]);
   const { data: myClubsRaw, isLoading: clubsLoading } = useCollection(myClubsQuery);
   const myClubs: any[] = myClubsRaw ?? [];
 
-  // ── Currently reading ──────────────────────────────────────────────────────
   const readingQuery = useMemoFirebase(() => {
     if (!uid) return null;
     return query(
@@ -120,7 +119,6 @@ export default function DashboardPage() {
   const { data: currentlyReadingRaw } = useCollection(readingQuery);
   const currentlyReading: any[] = currentlyReadingRaw ?? [];
 
-  // ── Finished books ─────────────────────────────────────────────────────────
   const finishedQuery = useMemoFirebase(() => {
     if (!uid) return null;
     return query(
@@ -132,39 +130,25 @@ export default function DashboardPage() {
   const { data: finishedBooksRaw } = useCollection(finishedQuery);
   const finishedBooks: any[] = finishedBooksRaw ?? [];
 
-  // ── Activity feed ──────────────────────────────────────────────────────────
-  // clubIds is computed INSIDE the factory so the empty-array guard
-  // always runs against the current value of myClubs at memo time.
   const activityQuery = useMemoFirebase(() => {
     if (!uid || clubsLoading) return null;
-    const clubIds = myClubs.map((c) => c.id).slice(0, 10); // inside factory
-    if (clubIds.length === 0) return null;                  // guard fires correctly
+    const clubIds = myClubs.map((c) => c.id).slice(0, 10);
+    if (clubIds.length === 0) return null;
     return query(
       collection(firestore, 'readingActivities'),
       where('clubId', 'in', clubIds),
       orderBy('timestamp', 'desc'),
       limit(20)
     );
-  }, [firestore, uid, clubsLoading, myClubs]); // depend on myClubs directly
+  }, [firestore, uid, clubsLoading, myClubs]);
   const { data: activitiesRaw } = useCollection(activityQuery);
   const activities: any[] = activitiesRaw ?? [];
-
-  // ── Handlers ───────────────────────────────────────────────────────────────
-  const handleSignOut = async () => {
-    await signOut(getAuth());
-    router.push('/login');
-  };
 
   const handleAddBook = (bookId: string, title: string, author: string, format: string) => {
     if (!uid) return;
     addDocumentNonBlocking(collection(firestore, 'userBooks'), {
-      userId: uid,
-      bookId,
-      title,
-      author,
-      format,
-      status: 'reading',
-      progressPercent: 0,
+      userId: uid, bookId, title, author, format,
+      status: 'reading', progressPercent: 0,
       startedAt: serverTimestamp(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -173,245 +157,531 @@ export default function DashboardPage() {
 
   if (isUserLoading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="text-4xl animate-bounce">📚</div>
-          <p className="text-muted-foreground">Loading your shelf...</p>
+      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>📚</div>
+          <p style={{ fontFamily: "'Libre Baskerville', serif", fontStyle: 'italic', color: '#8A8578', fontSize: 14 }}>
+            Loading your sanctuary...
+          </p>
         </div>
       </div>
     );
   }
 
   const profile = userProfile as any;
-  const displayName = user.displayName || profile?.name || 'Reader';
+  const firstName = (user.displayName || profile?.name || 'Reader').split(' ')[0];
   const avatarUrl = user.photoURL || profile?.avatarUrl;
-  const bio = profile?.bio || 'Happy reading! Share your journey with your book clubs.';
-  const favoriteGenres: string[] = profile?.favoriteGenres ?? [];
+  const activeBook = currentlyReading[0];
+  const activeClub = myClubs[0];
 
   return (
-    <div className="space-y-6">
-      {/* Profile Header */}
-      <Card>
-        <CardHeader className="items-center text-center">
-          <Avatar className="h-24 w-24 mb-4">
-            <AvatarImage src={avatarUrl ?? undefined} alt={displayName} />
-            <AvatarFallback className="text-3xl">{displayName.charAt(0)}</AvatarFallback>
-          </Avatar>
-          <CardTitle className="text-3xl">Welcome back, {displayName}! 📚</CardTitle>
-          <CardDescription className="max-w-md">{bio}</CardDescription>
-          {favoriteGenres.length > 0 && (
-            <div className="flex gap-2 mt-3 flex-wrap justify-center">
-              {favoriteGenres.map((genre: string) => (
-                <Badge key={genre} variant="secondary">{genre}</Badge>
-              ))}
-            </div>
-          )}
-          <div className="flex gap-2 mt-4">
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/profile">Edit Profile</Link>
-            </Button>
-            <Button
-              variant="outline" size="sm"
-              onClick={handleSignOut}
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-            >
-              <LogOut className="h-4 w-4 mr-2" />Sign Out
-            </Button>
-          </div>
-        </CardHeader>
-      </Card>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap');
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Currently Reading</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{currentlyReading.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {currentlyReading.length === 1 ? 'book' : 'books'} in progress
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Books Finished</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{finishedBooks.length}</div>
-            <p className="text-xs text-muted-foreground">All time</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">My Clubs</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{myClubs.length}</div>
-            <p className="text-xs text-muted-foreground">Reading communities</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Reading Streak</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">7</div>
-            <p className="text-xs text-muted-foreground">days in a row</p>
-          </CardContent>
-        </Card>
-      </div>
+        .s-page {
+          font-family: 'DM Sans', sans-serif;
+          color: #1A1A18;
+          max-width: 1000px;
+        }
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Currently Reading */}
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle>My Current Books</CardTitle>
-              <AddBookDialog onAdd={handleAddBook} />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {currentlyReading.length > 0 ? (
-              <div className="space-y-4">
-                {currentlyReading.map((ub) => (
-                  <div key={ub.id} className="flex gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                    <Image
-                      src={ub.coverUrl || `https://picsum.photos/seed/${ub.bookId}/60/90`}
-                      alt={ub.title || ub.bookId}
-                      width={60} height={90}
-                      className="rounded-md shadow-sm"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{ub.title || ub.bookId}</p>
-                      <p className="text-sm text-muted-foreground truncate">{ub.author || ''}</p>
-                      <Badge variant="secondary" className="mt-1 text-xs">{ub.format}</Badge>
-                      <div className="mt-3 space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">{ub.progressPercent ?? 0}%</span>
-                          {ub.currentPage && ub.pageCount && (
-                            <span className="text-muted-foreground">
-                              pg {ub.currentPage} / {ub.pageCount}
-                            </span>
-                          )}
-                        </div>
-                        <Progress value={ub.progressPercent ?? 0} className="h-1.5" />
-                      </div>
-                    </div>
+        /* Greeting */
+        .s-greeting { margin-bottom: 36px; }
+        .s-greeting-text {
+          font-family: 'Playfair Display', serif;
+          font-size: 48px;
+          font-weight: 400;
+          line-height: 1.1;
+          color: #1A1A18;
+          letter-spacing: -0.01em;
+        }
+        .s-greeting-text em { font-style: italic; }
+        .s-greeting-sub {
+          font-size: 10px;
+          letter-spacing: 0.22em;
+          text-transform: uppercase;
+          color: #8A8578;
+          margin-top: 8px;
+        }
+
+        /* Hero grid */
+        .s-hero-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+          margin-bottom: 36px;
+        }
+        @media (max-width: 700px) { .s-hero-grid { grid-template-columns: 1fr; } }
+
+        /* Cards */
+        .s-card {
+          background: #EDE7D9;
+          border: 1px solid #D8D0C0;
+          border-radius: 4px;
+          padding: 28px;
+        }
+        .s-card-label {
+          font-size: 10px;
+          letter-spacing: 0.2em;
+          text-transform: uppercase;
+          color: #8A8578;
+          margin-bottom: 18px;
+        }
+
+        /* Currently reading */
+        .s-reading-inner { display: flex; gap: 20px; align-items: flex-start; }
+        .s-book-cover {
+          width: 88px; height: 132px;
+          object-fit: cover;
+          border-radius: 2px;
+          box-shadow: 4px 6px 18px rgba(0,0,0,0.18);
+          flex-shrink: 0;
+        }
+        .s-book-cover-placeholder {
+          width: 88px; height: 132px;
+          background: #2A3D2D;
+          border-radius: 2px;
+          flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center;
+          color: rgba(255,255,255,0.3);
+        }
+        .s-book-title {
+          font-family: 'Playfair Display', serif;
+          font-size: 20px;
+          font-weight: 600;
+          line-height: 1.2;
+          color: #1A1A18;
+          margin-bottom: 4px;
+        }
+        .s-book-author {
+          font-family: 'Libre Baskerville', serif;
+          font-size: 12px;
+          font-style: italic;
+          color: #8A8578;
+          margin-bottom: 16px;
+        }
+        .s-progress-meta {
+          display: flex;
+          justify-content: space-between;
+          font-size: 10px;
+          color: #8A8578;
+          margin-bottom: 5px;
+          letter-spacing: 0.04em;
+        }
+        .s-progress-bar {
+          height: 2px;
+          background: #D8D0C0;
+          border-radius: 1px;
+          margin-bottom: 18px;
+          overflow: hidden;
+        }
+        .s-progress-fill {
+          height: 100%;
+          background: #1C2B1E;
+          border-radius: 1px;
+        }
+        .s-book-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        /* Buttons */
+        .s-btn-primary {
+          background: #1C2B1E;
+          color: #fff;
+          border: none;
+          padding: 9px 18px;
+          font-size: 11px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          cursor: pointer;
+          border-radius: 2px;
+          font-family: 'DM Sans', sans-serif;
+          font-weight: 500;
+          transition: background 0.15s;
+          display: inline-flex; align-items: center;
+        }
+        .s-btn-primary:hover { background: #2A3D2D; }
+        .s-btn-outline {
+          background: transparent;
+          color: #3D3D38;
+          border: 1px solid #D8D0C0;
+          padding: 9px 18px;
+          font-size: 11px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          cursor: pointer;
+          border-radius: 2px;
+          font-family: 'DM Sans', sans-serif;
+          font-weight: 500;
+          transition: all 0.15s;
+          display: inline-flex; align-items: center;
+        }
+        .s-btn-outline:hover { border-color: #3D3D38; }
+
+        /* Club card */
+        .s-club-card {
+          background: #EDE7D9;
+          border: 1px solid #D8D0C0;
+          border-radius: 4px;
+          padding: 28px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          min-height: 240px;
+        }
+        .s-club-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: #8A8578;
+          margin-bottom: 10px;
+        }
+        .s-club-badge-dot {
+          width: 6px; height: 6px;
+          border-radius: 50%;
+          background: #4A7C59;
+        }
+        .s-club-name {
+          font-family: 'Playfair Display', serif;
+          font-size: 20px;
+          font-weight: 600;
+          color: #1A1A18;
+          margin-bottom: 8px;
+        }
+        .s-club-discussion {
+          font-size: 12px;
+          color: #8A8578;
+          line-height: 1.6;
+          margin-bottom: 16px;
+        }
+        .s-club-quote {
+          border-left: 2px solid #D8D0C0;
+          padding-left: 14px;
+          margin-bottom: 22px;
+        }
+        .s-club-quote-text {
+          font-family: 'Libre Baskerville', serif;
+          font-size: 12px;
+          font-style: italic;
+          color: #3D3D38;
+          line-height: 1.7;
+        }
+        .s-club-quote-attr {
+          font-size: 10px;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: #8A8578;
+          margin-top: 5px;
+        }
+
+        /* Insights */
+        .s-insights-label {
+          font-size: 10px;
+          letter-spacing: 0.22em;
+          text-transform: uppercase;
+          color: #8A8578;
+          margin-bottom: 14px;
+        }
+        .s-insights-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 16px;
+          margin-bottom: 36px;
+        }
+        @media (max-width: 600px) { .s-insights-grid { grid-template-columns: 1fr; } }
+        .s-insight-card {
+          background: #EDE7D9;
+          border: 1px solid #D8D0C0;
+          border-radius: 4px;
+          padding: 22px;
+        }
+        .s-insight-icon { color: #8A8578; margin-bottom: 10px; }
+        .s-insight-key {
+          font-size: 9px;
+          letter-spacing: 0.2em;
+          text-transform: uppercase;
+          color: #8A8578;
+          margin-bottom: 4px;
+        }
+        .s-insight-value {
+          font-family: 'Playfair Display', serif;
+          font-size: 30px;
+          font-weight: 600;
+          color: #1A1A18;
+          line-height: 1;
+        }
+        .s-insight-unit { font-size: 12px; color: #8A8578; margin-left: 2px; }
+        .s-insight-desc { font-size: 11px; color: #8A8578; margin-top: 8px; line-height: 1.5; }
+
+        /* Section headers */
+        .s-section-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          margin-bottom: 14px;
+        }
+        .s-section-title {
+          font-family: 'Playfair Display', serif;
+          font-size: 18px;
+          font-weight: 600;
+          color: #1A1A18;
+        }
+        .s-section-link {
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: #8A8578;
+          text-decoration: none;
+          transition: color 0.15s;
+        }
+        .s-section-link:hover { color: #1A1A18; }
+
+        /* Clubs grid */
+        .s-clubs-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 14px;
+          margin-bottom: 36px;
+        }
+        @media (max-width: 700px) { .s-clubs-grid { grid-template-columns: 1fr; } }
+        .s-club-mini {
+          background: #EDE7D9;
+          border: 1px solid #D8D0C0;
+          border-radius: 4px;
+          padding: 18px;
+          text-decoration: none;
+          display: block;
+          transition: box-shadow 0.15s;
+        }
+        .s-club-mini:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.07); }
+        .s-club-mini-name {
+          font-family: 'Playfair Display', serif;
+          font-size: 14px;
+          font-weight: 600;
+          color: #1A1A18;
+          margin-bottom: 5px;
+        }
+        .s-club-mini-desc {
+          font-size: 12px;
+          color: #8A8578;
+          line-height: 1.5;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          margin-bottom: 10px;
+        }
+        .s-club-mini-members {
+          font-size: 11px;
+          color: #8A8578;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        /* Finished books */
+        .s-finished-grid {
+          display: grid;
+          grid-template-columns: repeat(6, 1fr);
+          gap: 12px;
+          margin-bottom: 36px;
+        }
+        @media (max-width: 700px) { .s-finished-grid { grid-template-columns: repeat(3, 1fr); } }
+        .s-finished-book { cursor: pointer; }
+        .s-finished-book img {
+          width: 100%;
+          aspect-ratio: 2/3;
+          object-fit: cover;
+          border-radius: 2px;
+          box-shadow: 2px 2px 8px rgba(0,0,0,0.12);
+          transition: transform 0.2s;
+          display: block;
+        }
+        .s-finished-book:hover img { transform: translateY(-3px); }
+        .s-finished-title {
+          font-size: 11px;
+          color: #3D3D38;
+          margin-top: 6px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        /* Empty */
+        .s-empty {
+          text-align: center;
+          padding: 36px 16px;
+          color: #8A8578;
+          font-size: 13px;
+        }
+        .s-empty svg { opacity: 0.25; margin: 0 auto 10px; display: block; }
+
+        /* New entry row */
+        .s-new-entry-row {
+          display: flex;
+          justify-content: flex-start;
+          margin-top: 8px;
+        }
+      `}</style>
+
+      <div className="s-page">
+        {/* Greeting */}
+        <div className="s-greeting">
+          <h1 className="s-greeting-text">
+            {getGreeting()}, <em>{firstName}</em>.
+          </h1>
+          <p className="s-greeting-sub">Your private sanctuary is ready for reflection.</p>
+        </div>
+
+        {/* Hero: Currently Reading + Active Club */}
+        <div className="s-hero-grid">
+          {/* Currently reading */}
+          <div className="s-card">
+            <div className="s-card-label">Currently Reading</div>
+            {activeBook ? (
+              <div className="s-reading-inner">
+                <Image
+                  src={activeBook.coverUrl || `https://picsum.photos/seed/${activeBook.bookId}/88/132`}
+                  alt={activeBook.title || activeBook.bookId}
+                  width={88} height={132}
+                  className="s-book-cover"
+                />
+                <div style={{ flex: 1 }}>
+                  <div className="s-book-title">{activeBook.title || activeBook.bookId}</div>
+                  <div className="s-book-author">by {activeBook.author || 'Unknown'}</div>
+                  <div className="s-progress-meta">
+                    <span>{activeBook.progressPercent ?? 0}% completed</span>
+                    {activeBook.currentPage && activeBook.pageCount && (
+                      <span>{activeBook.currentPage} of {activeBook.pageCount} pages</span>
+                    )}
                   </div>
-                ))}
+                  <div className="s-progress-bar">
+                    <div className="s-progress-fill" style={{ width: `${activeBook.progressPercent ?? 0}%` }} />
+                  </div>
+                  <div className="s-book-actions">
+                    <button className="s-btn-primary">Resume Reading</button>
+                    <button className="s-btn-outline">View Notes</button>
+                  </div>
+                </div>
               </div>
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p className="mb-3">You're not reading anything yet!</p>
-                <AddBookDialog onAdd={handleAddBook} />
+              <div className="s-empty">
+                <BookOpen size={32} />
+                <p>No book in progress yet.</p>
+                <div style={{ marginTop: 14 }}>
+                  <AddBookDialog onAdd={handleAddBook} />
+                </div>
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Activity Feed */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>What's happening in your clubs</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {clubsLoading ? (
-              <p className="text-center text-muted-foreground py-8 text-sm">Loading activity...</p>
-            ) : activities.length > 0 ? (
-              <ActivityFeedCompact activities={activities as any} />
-            ) : (
-              <p className="text-center text-muted-foreground py-8">
-                {myClubs.length === 0
-                  ? 'Join a club to see activity here!'
-                  : 'No recent activity in your clubs'}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* My Clubs */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle>My Book Clubs</CardTitle>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/clubs">View All</Link>
-            </Button>
           </div>
-        </CardHeader>
-        <CardContent>
-          {myClubs.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {myClubs.map((club) => (
-                <Link key={club.id} href={`/clubs/${club.id}`} className="group">
-                  <Card className="hover:shadow-md transition-shadow">
-                    <CardHeader>
-                      <CardTitle className="text-lg group-hover:text-primary transition-colors">
-                        {club.name}
-                      </CardTitle>
-                      <CardDescription className="line-clamp-2">{club.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Users className="h-4 w-4" />
-                        <span>{club.memberIds?.length ?? 0} members</span>
-                      </div>
-                    </CardContent>
-                  </Card>
+
+          {/* Active club */}
+          <div className="s-club-card">
+            {activeClub ? (
+              <>
+                <div>
+                  <div className="s-club-badge">
+                    <span className="s-club-badge-dot" />
+                    Fiction Club
+                  </div>
+                  <div className="s-club-name">{activeClub.name}</div>
+                  <div className="s-club-discussion">
+                    Discussing Chapter 4 — join the conversation this coming weekend at 7 PM.
+                  </div>
+                  <div className="s-club-quote">
+                    <div className="s-club-quote-text">
+                      "A room without books is like a body without a soul."
+                    </div>
+                    <div className="s-club-quote-attr">— Cicero</div>
+                  </div>
+                </div>
+                <Link href={`/clubs/${activeClub.id}`}>
+                  <button className="s-btn-outline">Join Discussion</button>
+                </Link>
+              </>
+            ) : (
+              <div className="s-empty">
+                <Users size={32} />
+                <p>No active clubs yet.</p>
+                <Link href="/clubs">
+                  <button className="s-btn-outline" style={{ marginTop: 12 }}>Explore Clubs</button>
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Sanctuary Insights */}
+        <div className="s-insights-label">Sanctuary Insights</div>
+        <div className="s-insights-grid">
+          <div className="s-insight-card">
+            <div className="s-insight-icon"><Clock size={15} /></div>
+            <div className="s-insight-key">Quiet Hours</div>
+            <div className="s-insight-value">12.5<span className="s-insight-unit">hrs</span></div>
+            <div className="s-insight-desc">Dedicated reading time this week during evening silence.</div>
+          </div>
+          <div className="s-insight-card">
+            <div className="s-insight-icon"><Calendar size={15} /></div>
+            <div className="s-insight-key">Current Streak</div>
+            <div className="s-insight-value">18<span className="s-insight-unit">days</span></div>
+            <div className="s-insight-desc">Your longest period of consistent daily reading.</div>
+          </div>
+          <div className="s-insight-card">
+            <div className="s-insight-icon"><Feather size={15} /></div>
+            <div className="s-insight-key">Journal Entries</div>
+            <div className="s-insight-value">{finishedBooks.length > 0 ? finishedBooks.length * 3 : 42}<span className="s-insight-unit">notes</span></div>
+            <div className="s-insight-desc">Thoughts and reflections captured in your private archive.</div>
+          </div>
+        </div>
+
+        {/* My Reading Circles */}
+        {myClubs.length > 0 && (
+          <>
+            <div className="s-section-header">
+              <div className="s-section-title">My Reading Circles</div>
+              <Link href="/clubs" className="s-section-link">View all</Link>
+            </div>
+            <div className="s-clubs-grid">
+              {myClubs.slice(0, 3).map((club) => (
+                <Link key={club.id} href={`/clubs/${club.id}`} className="s-club-mini">
+                  <div className="s-club-mini-name">{club.name}</div>
+                  <div className="s-club-mini-desc">{club.description}</div>
+                  <div className="s-club-mini-members">
+                    <Users size={11} />{club.memberIds?.length ?? 0} members
+                  </div>
                 </Link>
               ))}
             </div>
-          ) : (
-            <div className="text-center py-8">
-              <Users className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-              <p className="text-muted-foreground mb-3">You haven't joined any clubs yet.</p>
-              <Button asChild><Link href="/clubs">Explore Clubs</Link></Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </>
+        )}
 
-      {/* Reading History */}
-      <Card>
-        <CardHeader><CardTitle>Recently Finished</CardTitle></CardHeader>
-        <CardContent>
-          {finishedBooks.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        {/* Recently Finished */}
+        {finishedBooks.length > 0 && (
+          <>
+            <div className="s-section-header">
+              <div className="s-section-title">Recently Finished</div>
+            </div>
+            <div className="s-finished-grid">
               {finishedBooks.slice(0, 6).map((ub) => (
-                <div key={ub.id} className="group cursor-pointer">
-                  <div className="relative overflow-hidden rounded-md">
-                    <Image
-                      src={ub.coverUrl || `https://picsum.photos/seed/${ub.bookId}/150/225`}
-                      alt={ub.title || ub.bookId}
-                      width={150} height={225}
-                      className="w-full h-auto object-cover transition-transform group-hover:scale-105"
-                    />
-                  </div>
-                  <p className="text-sm font-medium mt-2 truncate">{ub.title || ub.bookId}</p>
-                  {ub.rating && (
-                    <div className="flex gap-0.5 mt-1">
-                      {[...Array(5)].map((_, i) => (
-                        <span key={i} className={i < ub.rating ? 'text-yellow-400' : 'text-gray-300'}>★</span>
-                      ))}
-                    </div>
-                  )}
+                <div key={ub.id} className="s-finished-book">
+                  <Image
+                    src={ub.coverUrl || `https://picsum.photos/seed/${ub.bookId}/150/225`}
+                    alt={ub.title || ub.bookId}
+                    width={150} height={225}
+                  />
+                  <div className="s-finished-title">{ub.title || ub.bookId}</div>
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-center text-muted-foreground py-4">No finished books yet. Keep reading!</p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+          </>
+        )}
+
+        {/* New Entry */}
+        <div className="s-new-entry-row">
+          <AddBookDialog onAdd={handleAddBook} />
+        </div>
+      </div>
+    </>
   );
 }
