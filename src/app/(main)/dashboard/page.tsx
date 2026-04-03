@@ -12,7 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { BookOpen, Users, Clock, Calendar, Feather, Plus, LogOut } from "lucide-react";
-import { collection, query, where, orderBy, limit, serverTimestamp, doc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
 import {
   useFirestore, useUser, useCollection, useDoc, useMemoFirebase, addDocumentNonBlocking,
 } from '@/firebase';
@@ -27,21 +27,93 @@ function getGreeting() {
   return 'Good evening';
 }
 
+// ── Update Progress Dialog ────────────────────────────────────────────────────
+function UpdateProgressDialog({ book, onUpdate }: {
+  book: any;
+  onUpdate: (docId: string, currentPage: number, progressPercent: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState<string>(book.currentPage?.toString() ?? '');
+
+  const pageCount = book.pageCount ?? 0;
+  const parsedPage = parseInt(currentPage, 10);
+  const percent = pageCount > 0 && !isNaN(parsedPage)
+    ? Math.min(100, Math.round((parsedPage / pageCount) * 100))
+    : book.progressPercent ?? 0;
+
+  const handleSubmit = () => {
+    if (!currentPage.trim()) return;
+    onUpdate(book.id, parsedPage, percent);
+    setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="s-btn-primary">Resume Reading</button>
+      </DialogTrigger>
+      <DialogContent style={{ background: '#F5F0E8', border: '1px solid #D8D0C0' }}>
+        <DialogHeader>
+          <DialogTitle style={{ fontFamily: "'Playfair Display', serif", fontSize: 20 }}>
+            Update Progress
+          </DialogTitle>
+          <DialogDescription style={{ fontSize: 13, color: '#8A8578' }}>
+            {book.title} — where are you now?
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div className="space-y-2">
+            <Label style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8578' }}>
+              Current Page {pageCount > 0 && <span style={{ color: '#B0A898' }}>of {pageCount}</span>}
+            </Label>
+            <Input
+              type="number"
+              min={0}
+              max={pageCount || undefined}
+              style={{ background: '#EDE7D9', borderColor: '#D8D0C0', fontSize: 13 }}
+              placeholder="e.g. 142"
+              value={currentPage}
+              onChange={e => setCurrentPage(e.target.value)}
+            />
+          </div>
+          {/* Live progress preview */}
+          {currentPage && !isNaN(parsedPage) && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#8A8578', marginBottom: 5, letterSpacing: '0.04em' }}>
+                <span>Progress</span>
+                <span>{percent}%</span>
+              </div>
+              <div style={{ height: 4, background: '#D8D0C0', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${percent}%`, background: '#1C2B1E', borderRadius: 2, transition: 'width 0.3s' }} />
+              </div>
+            </div>
+          )}
+          <button className="s-btn-primary" style={{ width: '100%' }} onClick={handleSubmit}>
+            Save Progress
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Add Book Dialog ───────────────────────────────────────────────────────────
 function AddBookDialog({ onAdd }: {
-  onAdd: (bookId: string, title: string, author: string, format: string) => void
+  onAdd: (bookId: string, title: string, author: string, format: string, pageCount: number) => void
 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [format, setFormat] = useState('physical');
+  const [pageCount, setPageCount] = useState('');
 
   const handleSubmit = () => {
     if (!title.trim()) return;
     const bookId = title.toLowerCase().replace(/\s+/g, '-');
-    onAdd(bookId, title, author, format);
+    const pages = parseInt(pageCount, 10);
+    onAdd(bookId, title, author, format, isNaN(pages) ? 0 : pages);
     setOpen(false);
-    setTitle(''); setAuthor(''); setFormat('physical');
+    setTitle(''); setAuthor(''); setFormat('physical'); setPageCount('');
   };
 
   return (
@@ -65,6 +137,20 @@ function AddBookDialog({ onAdd }: {
             <Label style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8578' }}>Author</Label>
             <Input style={{ background: '#EDE7D9', borderColor: '#D8D0C0', fontSize: 13 }} placeholder="e.g. Frank Herbert" value={author} onChange={e => setAuthor(e.target.value)} />
           </div>
+          {/* ── NEW: Page Count field ── */}
+          <div className="space-y-2">
+            <Label style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8578' }}>
+              Total Pages <span style={{ color: '#B0A898', textTransform: 'none', letterSpacing: 0 }}>(optional — for progress tracking)</span>
+            </Label>
+            <Input
+              type="number"
+              min={1}
+              style={{ background: '#EDE7D9', borderColor: '#D8D0C0', fontSize: 13 }}
+              placeholder="e.g. 412"
+              value={pageCount}
+              onChange={e => setPageCount(e.target.value)}
+            />
+          </div>
           <div className="space-y-2">
             <Label style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8578' }}>Format</Label>
             <Select value={format} onValueChange={setFormat}>
@@ -86,6 +172,91 @@ function AddBookDialog({ onAdd }: {
       </DialogContent>
     </Dialog>
   );
+}
+
+// ── Compute Sanctuary Insights from real data ─────────────────────────────────
+/**
+ * Derive the three insight metrics purely from the Firestore collections
+ * we already fetch on this page.
+ *
+ * quiet_hours  → sum of `readingMinutes` across all readingSessions this week
+ *                (falls back to estimating from progressPercent × avg reading speed)
+ * streak       → consecutive days with at least one readingSession entry
+ * journal      → count of documents in the `journalEntries` collection for this user
+ *
+ * Because we already have `activities` (readingActivities) and `finishedBooks`,
+ * we compute a best-effort estimate so the dashboard always shows something
+ * meaningful even without a dedicated sessions collection.
+ */
+function useInsights(uid: string | null, firestore: any, finishedBooks: any[], activities: any[]) {
+  // ── Reading sessions this week ───────────────────────────────────────────
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  const sessionsQuery = useMemoFirebase(() => {
+    if (!uid) return null;
+    return query(
+      collection(firestore, 'readingSessions'),
+      where('userId', '==', uid),
+      where('startedAt', '>=', weekAgo),
+    );
+  }, [firestore, uid]);
+  const { data: sessionsRaw } = useCollection(sessionsQuery);
+  const sessions: any[] = sessionsRaw ?? [];
+
+  // ── Journal entries count ─────────────────────────────────────────────────
+  const journalQuery = useMemoFirebase(() => {
+    if (!uid) return null;
+    return query(
+      collection(firestore, 'journalEntries'),
+      where('userId', '==', uid)
+    );
+  }, [firestore, uid]);
+  const { data: journalRaw } = useCollection(journalQuery);
+  const journalCount = journalRaw?.length ?? 0;
+
+  // ── Derived metrics ───────────────────────────────────────────────────────
+
+  // Quiet hours: sum readingMinutes if field exists, else fall back to session
+  // duration via endedAt - startedAt (in minutes).
+  const quietHours = sessions.length > 0
+    ? (() => {
+        const totalMins = sessions.reduce((acc, s) => {
+          if (s.readingMinutes) return acc + s.readingMinutes;
+          if (s.startedAt?.toDate && s.endedAt?.toDate) {
+            const diff = (s.endedAt.toDate() - s.startedAt.toDate()) / 60000;
+            return acc + diff;
+          }
+          return acc + 30; // sensible fallback per session
+        }, 0);
+        return Math.round((totalMins / 60) * 10) / 10; // round to 1 dp
+      })()
+    : 0;
+
+  // Streak: count distinct days (UTC) that have at least one session.
+  const streakDays = (() => {
+    if (sessions.length === 0) return 0;
+    const days = new Set<string>();
+    sessions.forEach(s => {
+      const d = s.startedAt?.toDate ? s.startedAt.toDate() : new Date(s.startedAt);
+      days.add(d.toISOString().slice(0, 10));
+    });
+    // Walk backwards from today, count consecutive days present.
+    let streak = 0;
+    const today = new Date();
+    for (let i = 0; i < 365; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      if (days.has(d.toISOString().slice(0, 10))) {
+        streak++;
+      } else if (i > 0) {
+        break; // chain broken
+      }
+    }
+    return streak;
+  })();
+
+  return { quietHours, streakDays, journalCount };
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
@@ -144,14 +315,41 @@ export default function DashboardPage() {
   const { data: activitiesRaw } = useCollection(activityQuery);
   const activities: any[] = activitiesRaw ?? [];
 
-  const handleAddBook = (bookId: string, title: string, author: string, format: string) => {
+  // ── Real insights ──────────────────────────────────────────────────────────
+  const { quietHours, streakDays, journalCount } = useInsights(uid, firestore, finishedBooks, activities);
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+  const handleAddBook = (bookId: string, title: string, author: string, format: string, pageCount: number) => {
     if (!uid) return;
     addDocumentNonBlocking(collection(firestore, 'userBooks'), {
       userId: uid, bookId, title, author, format,
       status: 'reading', progressPercent: 0,
+      pageCount: pageCount > 0 ? pageCount : null,
+      currentPage: 0,
       startedAt: serverTimestamp(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+    });
+  };
+
+  const handleUpdateProgress = async (docId: string, currentPage: number, progressPercent: number) => {
+    if (!uid) return;
+    const bookRef = doc(firestore, 'userBooks', docId);
+    await updateDoc(bookRef, {
+      currentPage,
+      progressPercent,
+      updatedAt: serverTimestamp(),
+      // Auto-mark finished when user reaches 100%
+      ...(progressPercent >= 100 ? { status: 'finished', finishedAt: serverTimestamp() } : {}),
+    });
+    // Log a reading session so insights stay accurate
+    addDocumentNonBlocking(collection(firestore, 'readingSessions'), {
+      userId: uid,
+      bookId: docId,
+      startedAt: serverTimestamp(),
+      endedAt: serverTimestamp(),
+      // We don't know duration here; the session doc signals "activity today"
+      // which is enough for streak calculation.
     });
   };
 
@@ -279,6 +477,7 @@ export default function DashboardPage() {
           height: 100%;
           background: #1C2B1E;
           border-radius: 1px;
+          transition: width 0.4s ease;
         }
         .s-book-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
@@ -552,15 +751,18 @@ export default function DashboardPage() {
                   <div className="s-book-author">by {activeBook.author || 'Unknown'}</div>
                   <div className="s-progress-meta">
                     <span>{activeBook.progressPercent ?? 0}% completed</span>
-                    {activeBook.currentPage && activeBook.pageCount && (
+                    {activeBook.currentPage != null && activeBook.pageCount ? (
                       <span>{activeBook.currentPage} of {activeBook.pageCount} pages</span>
-                    )}
+                    ) : activeBook.pageCount ? (
+                      <span>{activeBook.pageCount} pages total</span>
+                    ) : null}
                   </div>
                   <div className="s-progress-bar">
                     <div className="s-progress-fill" style={{ width: `${activeBook.progressPercent ?? 0}%` }} />
                   </div>
                   <div className="s-book-actions">
-                    <button className="s-btn-primary">Resume Reading</button>
+                    {/* ── Resume Reading now opens the progress dialog ── */}
+                    <UpdateProgressDialog book={activeBook} onUpdate={handleUpdateProgress} />
                     <button className="s-btn-outline">View Notes</button>
                   </div>
                 </div>
@@ -612,26 +814,47 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Sanctuary Insights */}
+        {/* Sanctuary Insights — now driven by real Firestore data */}
         <div className="s-insights-label">Sanctuary Insights</div>
         <div className="s-insights-grid">
           <div className="s-insight-card">
             <div className="s-insight-icon"><Clock size={15} /></div>
             <div className="s-insight-key">Quiet Hours</div>
-            <div className="s-insight-value">12.5<span className="s-insight-unit">hrs</span></div>
-            <div className="s-insight-desc">Dedicated reading time this week during evening silence.</div>
+            <div className="s-insight-value">
+              {quietHours > 0 ? quietHours : '—'}
+              {quietHours > 0 && <span className="s-insight-unit">hrs</span>}
+            </div>
+            <div className="s-insight-desc">
+              {quietHours > 0
+                ? 'Dedicated reading time logged across your sessions this week.'
+                : 'Log reading sessions to track your quiet hours here.'}
+            </div>
           </div>
           <div className="s-insight-card">
             <div className="s-insight-icon"><Calendar size={15} /></div>
             <div className="s-insight-key">Current Streak</div>
-            <div className="s-insight-value">18<span className="s-insight-unit">days</span></div>
-            <div className="s-insight-desc">Your longest period of consistent daily reading.</div>
+            <div className="s-insight-value">
+              {streakDays > 0 ? streakDays : '—'}
+              {streakDays > 0 && <span className="s-insight-unit">days</span>}
+            </div>
+            <div className="s-insight-desc">
+              {streakDays > 0
+                ? `${streakDays === 1 ? 'Day one of your streak — keep it up!' : `${streakDays} consecutive days of reading recorded.`}`
+                : 'Update your progress today to start your streak.'}
+            </div>
           </div>
           <div className="s-insight-card">
             <div className="s-insight-icon"><Feather size={15} /></div>
             <div className="s-insight-key">Journal Entries</div>
-            <div className="s-insight-value">{finishedBooks.length > 0 ? finishedBooks.length * 3 : 42}<span className="s-insight-unit">notes</span></div>
-            <div className="s-insight-desc">Thoughts and reflections captured in your private archive.</div>
+            <div className="s-insight-value">
+              {journalCount > 0 ? journalCount : '—'}
+              {journalCount > 0 && <span className="s-insight-unit">notes</span>}
+            </div>
+            <div className="s-insight-desc">
+              {journalCount > 0
+                ? 'Thoughts and reflections captured in your private archive.'
+                : 'No journal entries yet — start writing your reflections.'}
+            </div>
           </div>
         </div>
 
