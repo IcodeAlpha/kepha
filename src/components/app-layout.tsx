@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Book, LayoutDashboard, Library, PanelLeft, Settings, User as UserIcon, Users,
+  Archive, Book, LayoutDashboard, Library, PanelLeft, Settings, User as UserIcon, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -23,6 +23,7 @@ const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Library"  },
   { href: "/discover",  icon: Library,         label: "Discover" },
   { href: "/clubs",     icon: Users,            label: "Clubs"    },
+  { href: "/archive",   icon: Archive,          label: "Archive"  },
   { href: "/profile",   icon: UserIcon,         label: "Profile"  },
   { href: "/settings",  icon: Settings,         label: "Settings" },
 ];

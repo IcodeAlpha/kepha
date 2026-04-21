@@ -119,9 +119,7 @@ export default function ProfilePage() {
   const reflectionsQuery = useMemoFirebase(() => {
     if (!user) return null;
     return query(
-      collection(firestore, 'readingActivities'),
-      where('userId', '==', user.uid),
-      where('type', '==', 'shared-quote'),
+      collection(firestore, 'userReflections', user.uid, 'entries'),
       orderBy('timestamp', 'desc'),
       limit(5)
     );
