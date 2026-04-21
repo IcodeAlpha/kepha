@@ -132,16 +132,33 @@ export default function ReadingSessionPage() {
     });
   };
 
-  const handlePostReflection = (content: string) => {
-    if (!user || !content.trim()) return;
+  const handlePostReflection = (content: string, chapter: string) => {
+    if (!user) return;
     const userName = user.displayName || user.email?.split('@')[0] || 'Reader';
-    addDocumentNonBlocking(collection(firestore, 'clubs', clubId, 'reflections'), {
-      userId: user.uid, userName, content,
-      chapter: chapterInput || null,
+  
+    // Existing write to club reflections
+    addDocumentNonBlocking(collection(firestore, 'clubs', id, 'reflections'), {
+      userId: user.uid, userName, content, chapter,
       timestamp: serverTimestamp(), likes: 0, likedBy: [], commentCount: 0,
-      bookTitle: mySharedBook?.title || null, fromSession: true,
+      bookTitle: mySharedBook?.title || null,
     });
-    handleSendMessage(`"${content}"`);
+  
+    // ── Mirror to user's personal journal ──
+    addDocumentNonBlocking(collection(firestore, 'userReflections', user.uid, 'entries'), {
+      userId: user.uid,
+      content,
+      chapter: chapter || null,
+      bookTitle: mySharedBook?.title || null,
+      clubId: id,
+      clubName: clubData.name || null,
+      timestamp: serverTimestamp(),
+    });
+  
+    // Existing activity log
+    addDocumentNonBlocking(collection(firestore, 'readingActivities'), {
+      userId: user.uid, userName, clubId: id, type: 'shared-quote',
+      content, bookTitle: mySharedBook?.title || null, timestamp: serverTimestamp(),
+    });
   };
 
   const handleJoinSession = () => {
